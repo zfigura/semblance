@@ -23,14 +23,6 @@
 #endif
 
 typedef struct {
-    word cs;
-    long start;
-    word length;
-    word flags;
-    word min_alloc;
-} segment;
-
-typedef struct {
     byte size;
     byte type;
     word offset_count;
@@ -39,6 +31,17 @@ typedef struct {
     word target_offset;
     char *text;
 } reloc;
+
+typedef struct {
+    word cs;
+    long start;
+    word length;
+    word flags;
+    word min_alloc;
+    byte *instr_flags;
+    reloc *reloc_table;
+    word reloc_count;
+} segment;
 
 enum arg {
     NONE = 0,
@@ -1722,7 +1725,7 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
     return len;
 };
 
-static void print_disassembly(const byte *flags, const segment *seg, const reloc *reloc_data, const word reloc_count) {
+static void print_disassembly(const segment *seg) {
     const word cs = seg->cs;
     word ip = 0;
 
@@ -1732,9 +1735,9 @@ static void print_disassembly(const byte *flags, const segment *seg, const reloc
 
     while (ip < seg->length) {
         /* find a valid instruction */
-        if (!(flags[ip] & INSTR_VALID)) {
+        if (!(seg->instr_flags[ip] & INSTR_VALID)) {
             printf("     ...\n");
-            while ((ip < seg->length) && !(flags[ip] & INSTR_VALID)) ip++;
+            while ((ip < seg->length) && !(seg->instr_flags[ip] & INSTR_VALID)) ip++;
         }
 
         if (ip == seg->length) return;
@@ -1748,18 +1751,18 @@ static void print_disassembly(const byte *flags, const segment *seg, const reloc
         else
             fread(buffer, 1, sizeof(buffer), f);
 
-        if (flags[ip] & INSTR_FUNC) {
+        if (seg->instr_flags[ip] & INSTR_FUNC) {
             char *name = get_entry_name(cs, ip);
             printf("\n");
             printf("%d:%04x <%s>:\n", cs, ip, name ? name : "no name");
         }
 
-        ip += print_instr(cs, ip, flags, buffer, out, reloc_data, reloc_count, is32);
+        ip += print_instr(cs, ip, seg->instr_flags, buffer, out, seg->reloc_table, seg->reloc_count, is32);
         printf("%s\n", out);
     }
 }
 
-static void scan_segment(byte *flags, segment *seg, word ip) {
+static void scan_segment(segment *seg, word ip) {
     word cs = seg->cs;
 
     byte buffer[MAX_INSTR];
@@ -1771,13 +1774,13 @@ static void scan_segment(byte *flags, segment *seg, word ip) {
         return;
     }
 
-    if ((flags[ip] & (INSTR_VALID|INSTR_SCANNED)) == INSTR_SCANNED) {
+    if ((seg->instr_flags[ip] & (INSTR_VALID|INSTR_SCANNED)) == INSTR_SCANNED) {
         warn_at("Attempt to scan byte that does not begin instruction.\n");
     }
 
     while (ip < seg->length) {
         /* check if we already read from here */
-        if (flags[ip] & INSTR_SCANNED) return;
+        if (seg->instr_flags[ip] & INSTR_SCANNED) return;
 
         /* read the instruction */
         fseek(f, seg->start+ip, SEEK_SET);
@@ -1789,8 +1792,8 @@ static void scan_segment(byte *flags, segment *seg, word ip) {
         instr_length = get_instr(cs, ip, buffer, &instr, seg->flags & 0x2000);
 
         /* mark the bytes */
-        flags[ip] |= INSTR_VALID;
-        while (instr_length-- && ip < seg->length) flags[ip++] |= INSTR_SCANNED;
+        seg->instr_flags[ip] |= INSTR_VALID;
+        while (instr_length-- && ip < seg->length) seg->instr_flags[ip++] |= INSTR_SCANNED;
 
         /* note: it *is* valid for the last instruction to "hang over" the end
          * of the segment, so don't break here. */
@@ -1803,10 +1806,10 @@ static void scan_segment(byte *flags, segment *seg, word ip) {
             /* as above */
         } else if (instr.op.arg0 == REL8 || instr.op.arg0 == REL16) {
             /* near relative jump, loop, or call */
-            flags[instr.arg0] |= INSTR_JUMP;
+            seg->instr_flags[instr.arg0] |= INSTR_JUMP;
 
             /* scan it */
-            scan_segment(flags, seg, instr.arg0);
+            scan_segment(seg, instr.arg0);
 
             if (!strcmp(instr.op.name, "jmp"))
                 return;
@@ -1969,9 +1972,12 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
         segments[seg].length = read_word();
         segments[seg].flags = read_word();
         segments[seg].min_alloc = read_word();
+
+        /* Use min_alloc rather than length because data can "hang over". */
+        segments[seg].instr_flags = calloc(segments[seg].min_alloc, sizeof(byte));
     }
 
-    for (seg=0; seg<count; seg++) {
+    for (seg = 0; seg < count; seg++) {
         printf("Segment %d (start = 0x%lx, length = 0x%x, minimum allocation = %d [0x%x]):\n",
             seg+1, segments[seg].start, segments[seg].length,
             segments[seg].min_alloc ? segments[seg].min_alloc : 65536, segments[seg].min_alloc);
@@ -1980,22 +1986,17 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
         if (segments[seg].flags & 0x0001) {
             /* todo */
         } else {
-            reloc *reloc_data;
-            word reloc_count;
-            /* Use min_alloc rather than length because data can "hang over". */
-            byte *flags = calloc(segments[seg].min_alloc, sizeof(byte));
-
             /* take care of the relocation data first */
             fseek(f, segments[seg].start + segments[seg].length, SEEK_SET);
-            reloc_count = read_word();
-            reloc_data = malloc(reloc_count * sizeof(reloc));
+            segments[seg].reloc_count = read_word();
+            segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(reloc));
 
-            for (i=0; i<reloc_count; i++) {
+            for (i = 0; i < segments[seg].reloc_count; i++) {
                 int o;
                 fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);
-                read_reloc(&reloc_data[i], segments[seg].start, segments[seg].length);
-                for (o=0; o<reloc_data[i].offset_count; o++) {
-                    flags[reloc_data[i].offsets[o]] |= INSTR_RELOC;
+                read_reloc(&segments[seg].reloc_table[i], segments[seg].start, segments[seg].length);
+                for (o = 0; o < segments[seg].reloc_table[i].offset_count; o++) {
+                    segments[seg].instr_flags[segments[seg].reloc_table[i].offsets[o]] |= INSTR_RELOC;
                 }
             }
 
@@ -2010,8 +2011,8 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
                      * may potentially miss private entries, but it's better than nothing. */
                     if (!(entry_table[i].flags & 1)) continue;
 
-                    flags[entry_table[i].offset] |= INSTR_FUNC;
-                    scan_segment(flags, &segments[seg], entry_table[i].offset);
+                    segments[seg].instr_flags[entry_table[i].offset] |= INSTR_FUNC;
+                    scan_segment(&segments[seg], entry_table[i].offset);
                 }
             }
 
@@ -2021,15 +2022,15 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
                 if (entry_ip >= segments[seg].length) {
                     warn("Entry point %d:%04x exceeds segment length (%04x)\n", entry_cs, entry_ip, segments[seg].length);
                 } else {
-                    flags[entry_ip] |= INSTR_FUNC;
-                    scan_segment(flags, &segments[seg], entry_ip);
+                    segments[seg].instr_flags[entry_ip] |= INSTR_FUNC;
+                    scan_segment(&segments[seg], entry_ip);
                 }
             }
 
-            print_disassembly(flags, &segments[seg], reloc_data, reloc_count);
+            print_disassembly(&segments[seg]);
 
-            free_reloc(reloc_data, reloc_count);
-            free(flags);
+            free_reloc(segments[seg].reloc_table, segments[seg].reloc_count);
+            free(segments[seg].instr_flags);
         }
     }
 
