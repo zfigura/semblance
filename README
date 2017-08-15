@@ -1,0 +1,19 @@
+Semblance version 1.0
+=====================
+
+Semblance is eventually meant as a set of tools to manipulate assembly
+code. Currently it only contains a single program:
+
+dumpne - produce disassembly and other information from NE files 
+
+
+Installing
+----------
+
+To build, just run:
+
+    ./autogen.sh
+    ./configure
+    make
+
+To install to your computer, subsequently run "make install" as root.
