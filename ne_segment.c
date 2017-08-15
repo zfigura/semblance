@@ -2018,9 +2018,9 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
 
     /* Final pass: print data */
     for (seg = 0; seg < count; seg++) {
-        printf("Segment %d (start = 0x%lx, length = 0x%x, minimum allocation = %d [0x%x]):\n",
+        printf("Segment %d (start = 0x%lx, length = 0x%x, minimum allocation = 0x%x):\n",
             seg+1, segments[seg].start, segments[seg].length,
-            segments[seg].min_alloc ? segments[seg].min_alloc : 65536, segments[seg].min_alloc);
+            segments[seg].min_alloc ? segments[seg].min_alloc : 65536);
         print_segment_flags(segments[seg].flags);
 
         if (segments[seg].flags & 0x0001) {
