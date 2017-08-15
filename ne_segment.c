@@ -12,7 +12,8 @@
 #define INSTR_VALID     0x02    /* byte begins an instruction */
 #define INSTR_JUMP      0x04    /* instruction is jumped to */
 #define INSTR_FUNC      0x08    /* instruction begins a function */
-#define INSTR_RELOC     0x10    /* byte has relocation data */
+#define INSTR_FAR       0x10    /* instruction is target of far call/jmp */
+#define INSTR_RELOC     0x20    /* byte has relocation data */
 
 #ifdef USE_WARN
 #define warn_at(...) \
@@ -42,6 +43,9 @@ typedef struct {
     reloc *reloc_table;
     word reloc_count;
 } segment;
+
+/* global segment list */
+static segment *segments;
 
 enum arg {
     NONE = 0,
@@ -1650,8 +1654,12 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
     }
 
     /* mark instructions that are jumped to */
-    if (flags[ip] & INSTR_JUMP)
+    if (flags[ip] & INSTR_JUMP) {
         outp[-1] = '>';
+        if (flags[ip] & INSTR_FAR) {
+            outp[-2] = '>';
+        }
+    }
 
     /* print prefixes, including (fake) prefixes if ours are invalid */
     if (instr.prefix & PREFIX_SEG_MASK) {
@@ -1755,6 +1763,8 @@ static void print_disassembly(const segment *seg) {
             char *name = get_entry_name(cs, ip);
             printf("\n");
             printf("%d:%04x <%s>:\n", cs, ip, name ? name : "no name");
+            /* don't mark far functions—we can't reliably detect them
+             * because of "push cs", and they should be evident anyway. */
         }
 
         ip += print_instr(cs, ip, seg->instr_flags, buffer, out, seg->reloc_table, seg->reloc_count, is32);
@@ -1762,12 +1772,13 @@ static void print_disassembly(const segment *seg) {
     }
 }
 
-static void scan_segment(segment *seg, word ip) {
-    word cs = seg->cs;
+static void scan_segment(word cs, word ip) {
+    segment *seg = &segments[cs-1];
 
     byte buffer[MAX_INSTR];
     instr_info instr;
     int instr_length;
+    int i;
 
     if (ip >= seg->length) {
         warn_at("Attempt to scan past end of segment.\n");
@@ -1793,23 +1804,53 @@ static void scan_segment(segment *seg, word ip) {
 
         /* mark the bytes */
         seg->instr_flags[ip] |= INSTR_VALID;
-        while (instr_length-- && ip < seg->length) seg->instr_flags[ip++] |= INSTR_SCANNED;
+        for (i = 0; i < instr_length; i++) seg->instr_flags[ip+i] |= INSTR_SCANNED;
 
         /* note: it *is* valid for the last instruction to "hang over" the end
          * of the segment, so don't break here. */
 
         /* handle conditional and unconditional jumps */
-        if (instr.op.opcode == 0xEA) {
-            /* far jump; we need to apply relocation (todo) */
-            return;
-        } else if (instr.op.opcode == 0x9A) {
-            /* as above */
+        if (instr.op.arg0 == PTR32) {
+            for (i = ip; i < ip+instr_length; i++) {
+                if (seg->instr_flags[i] & INSTR_RELOC) {
+                    const reloc *r = get_reloc(cs, i, seg->reloc_table, seg->reloc_count);
+                    const segment *tseg = &segments[r->target_segment-1];
+
+                    if (r->type != 0) break;
+
+                    if (r->size == 3) {
+                        /* 32-bit relocation on 32-bit pointer */
+                        tseg->instr_flags[r->target_offset] |= INSTR_FAR;
+                        if (!strcmp(instr.op.name, "call"))
+                            tseg->instr_flags[r->target_offset] |= INSTR_FUNC;
+                        else
+                            tseg->instr_flags[r->target_offset] |= INSTR_JUMP;
+                        scan_segment(r->target_segment, r->target_offset);
+                    } else if (r->size == 2) {
+                        /* segment relocation on 32-bit pointer */
+                        tseg->instr_flags[instr.arg0] |= INSTR_FAR;
+                        if (!strcmp(instr.op.name, "call"))
+                            tseg->instr_flags[instr.arg0] |= INSTR_FUNC;
+                        else
+                            tseg->instr_flags[instr.arg0] |= INSTR_JUMP;
+                        scan_segment(r->target_segment, instr.arg0);
+                    }
+
+                    break;
+                }
+            }
+
+            if (!strcmp(instr.op.name, "jmp"))
+                return;
         } else if (instr.op.arg0 == REL8 || instr.op.arg0 == REL16) {
             /* near relative jump, loop, or call */
-            seg->instr_flags[instr.arg0] |= INSTR_JUMP;
+            if (!strcmp(instr.op.name, "call"))
+                seg->instr_flags[instr.arg0] |= INSTR_FUNC;
+            else
+                seg->instr_flags[instr.arg0] |= INSTR_JUMP;
 
             /* scan it */
-            scan_segment(seg, instr.arg0);
+            scan_segment(cs, instr.arg0);
 
             if (!strcmp(instr.op.name, "jmp"))
                 return;
@@ -1819,6 +1860,8 @@ static void scan_segment(segment *seg, word ip) {
         } else if (!strcmp(instr.op.name, "ret")) {
             return;
         }
+
+        ip += instr_length;
     }
 
     warn_at("Scan reached the end of segment.\n");
@@ -1964,7 +2007,7 @@ void free_reloc(reloc *reloc_data, word reloc_count) {
 void print_segments(word count, word align, word entry_cs, word entry_ip) {
     unsigned i, seg;
 
-    segment *segments = malloc(count * sizeof(segment));
+    segments = malloc(count * sizeof(segment));
 
     for (seg = 0; seg < count; seg++) {
         segments[seg].cs = seg+1;
@@ -2003,7 +2046,7 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
          * may potentially miss private entries, but it's better than nothing. */
         if (!(entry_table[i].flags & 1)) continue;
 
-        scan_segment(&segments[entry_table[i].segment-1], entry_table[i].offset);
+        scan_segment(entry_table[i].segment, entry_table[i].offset);
         segments[entry_table[i].segment-1].instr_flags[entry_table[i].offset] |= INSTR_FUNC;
     }
 
@@ -2013,7 +2056,7 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
         warn("Entry point %d:%04x exceeds segment length (%04x)\n", entry_cs, entry_ip, segments[seg].length);
     } else {
         segments[entry_cs-1].instr_flags[entry_ip] |= INSTR_FUNC;
-        scan_segment(&segments[entry_cs-1], entry_ip);
+        scan_segment(entry_cs, entry_ip);
     }
 
     /* Final pass: print data */
@@ -2027,10 +2070,11 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
             /* todo */
         } else {
             print_disassembly(&segments[seg]);
-
-            free_reloc(segments[seg].reloc_table, segments[seg].reloc_count);
-            free(segments[seg].instr_flags);
         }
+
+        /* and free our segment per-segment data */
+        free_reloc(segments[seg].reloc_table, segments[seg].reloc_count);
+        free(segments[seg].instr_flags);
     }
 
     free(segments);
