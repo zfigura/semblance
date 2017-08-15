@@ -1977,6 +1977,46 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
         segments[seg].instr_flags = calloc(segments[seg].min_alloc, sizeof(byte));
     }
 
+    /* First pass: just read the relocation data */
+    for (seg = 0; seg < count; seg++) {
+        fseek(f, segments[seg].start + segments[seg].length, SEEK_SET);
+        segments[seg].reloc_count = read_word();
+        segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(reloc));
+
+        for (i = 0; i < segments[seg].reloc_count; i++) {
+            int o;
+            fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);
+            read_reloc(&segments[seg].reloc_table[i], segments[seg].start, segments[seg].length);
+            for (o = 0; o < segments[seg].reloc_table[i].offset_count; o++) {
+                segments[seg].instr_flags[segments[seg].reloc_table[i].offsets[o]] |= INSTR_RELOC;
+            }
+        }
+    }
+
+    /* Second pass: scan entry points (we have to do this after we read
+     * relocation data for all segments.) */
+    for (i = 0; i < entry_count; i++) {
+
+        /* Annoyingly, data can be put in code segments, and without any
+         * apparent indication that it is not code. As a dumb heuristic,
+         * only scan exported entries—this won't work universally, and it
+         * may potentially miss private entries, but it's better than nothing. */
+        if (!(entry_table[i].flags & 1)) continue;
+
+        scan_segment(&segments[entry_table[i].segment-1], entry_table[i].offset);
+        segments[entry_table[i].segment-1].instr_flags[entry_table[i].offset] |= INSTR_FUNC;
+    }
+
+    /* and don't forget to scan the program entry point */
+    if (entry_ip >= segments[entry_cs-1].length) {
+        /* see note above under relocations */
+        warn("Entry point %d:%04x exceeds segment length (%04x)\n", entry_cs, entry_ip, segments[seg].length);
+    } else {
+        segments[entry_cs-1].instr_flags[entry_ip] |= INSTR_FUNC;
+        scan_segment(&segments[entry_cs-1], entry_ip);
+    }
+
+    /* Final pass: print data */
     for (seg = 0; seg < count; seg++) {
         printf("Segment %d (start = 0x%lx, length = 0x%x, minimum allocation = %d [0x%x]):\n",
             seg+1, segments[seg].start, segments[seg].length,
@@ -1986,47 +2026,6 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
         if (segments[seg].flags & 0x0001) {
             /* todo */
         } else {
-            /* take care of the relocation data first */
-            fseek(f, segments[seg].start + segments[seg].length, SEEK_SET);
-            segments[seg].reloc_count = read_word();
-            segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(reloc));
-
-            for (i = 0; i < segments[seg].reloc_count; i++) {
-                int o;
-                fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);
-                read_reloc(&segments[seg].reloc_table[i], segments[seg].start, segments[seg].length);
-                for (o = 0; o < segments[seg].reloc_table[i].offset_count; o++) {
-                    segments[seg].instr_flags[segments[seg].reloc_table[i].offsets[o]] |= INSTR_RELOC;
-                }
-            }
-
-            /* first pass */
-
-            for (i=0; i<entry_count; i++) {
-                if (entry_table[i].segment == seg+1) {
-
-                    /* Annoyingly, data can be put in code segments, and without any
-                     * apparent indication that it is not code. As a dumb heuristic,
-                     * only scan exported entries—this won't work universally, and it
-                     * may potentially miss private entries, but it's better than nothing. */
-                    if (!(entry_table[i].flags & 1)) continue;
-
-                    segments[seg].instr_flags[entry_table[i].offset] |= INSTR_FUNC;
-                    scan_segment(&segments[seg], entry_table[i].offset);
-                }
-            }
-
-            /* and don't forget to scan the entry point */
-            if (entry_cs == seg+1) {
-                /* see note above under relocations */
-                if (entry_ip >= segments[seg].length) {
-                    warn("Entry point %d:%04x exceeds segment length (%04x)\n", entry_cs, entry_ip, segments[seg].length);
-                } else {
-                    segments[seg].instr_flags[entry_ip] |= INSTR_FUNC;
-                    scan_segment(&segments[seg], entry_ip);
-                }
-            }
-
             print_disassembly(&segments[seg]);
 
             free_reloc(segments[seg].reloc_table, segments[seg].reloc_count);
