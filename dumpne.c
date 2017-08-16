@@ -501,6 +501,42 @@ int main(int argc, char *argv[]){
     
     while ((opt = getopt_long(argc, argv, "a::dDfhMosv", long_options, NULL)) >= 0){
         switch (opt) {
+        case 'a': /* dump resources only */
+        {
+            int ret;
+            char type[256];
+            unsigned i;
+            mode |= DUMPRSRC;
+            if (optarg){
+                if (resource_count == MAXARGS){
+                    fprintf(stderr, "Too many resources specified\n");
+                    return 1;
+                }
+                if (0 >= (ret = sscanf(optarg, "%s %hu", type, &resource_id[resource_count])))
+                    /* empty argument, so do nothing */
+                    break;
+                if (ret == 1)
+                    resource_id[resource_count] = 0;
+
+                /* todo(?): let the user specify string [exe-defined] types, and also
+                 * string id names */
+                if (!sscanf(type, "%hu", &resource_type[resource_count])){
+                    resource_type[resource_count] = 0;
+                    for (i=1;i<rsrc_types_count;i++){
+                        if(rsrc_types[i] && !strcasecmp(rsrc_types[i], type)){
+                            resource_type[resource_count] = 0x8000|i;
+                            break;
+                        }
+                    }
+                    if(!resource_type[resource_count]){
+                        fprintf(stderr, "Unrecognized resource type '%s'\n", type);
+                        return 1;
+                    }
+                }
+                resource_count++;
+            }
+            break;
+        }
         case 'd': /* disassemble only */
             mode |= DISASSEMBLE;
             if (optarg){
@@ -538,42 +574,6 @@ int main(int argc, char *argv[]){
         case 'o': /* make a specfile */
             mode = SPECFILE;
             break;
-        case 'r': /* dump resources only */
-        {
-            int ret;
-            char type[256];
-            unsigned i;
-            mode |= DUMPRSRC;
-            if (optarg){
-                if (resource_count == MAXARGS){
-                    fprintf(stderr, "Too many resources specified\n");
-                    return 1;
-                }
-                if (0 >= (ret = sscanf(optarg, "%s %hu", type, &resource_id[resource_count])))
-                    /* empty argument, so do nothing */
-                    break;
-                if (ret == 1)
-                    resource_id[resource_count] = 0;
-
-                /* todo(?): let the user specify string [exe-defined] types, and also
-                 * string id names */
-                if (!sscanf(type, "%hu", &resource_type[resource_count])){
-                    resource_type[resource_count] = 0;
-                    for (i=1;i<rsrc_types_count;i++){
-                        if(rsrc_types[i] && !strcasecmp(rsrc_types[i], type)){
-                            resource_type[resource_count] = 0x8000|i;
-                            break;
-                        }
-                    }
-                    if(!resource_type[resource_count]){
-                        fprintf(stderr, "Unrecognized resource type '%s'\n", type);
-                        return 1;
-                    }
-                }
-                resource_count++;
-            }
-            break;
-        }
         case 's': /* dump everything */
             mode |= DUMPHEADER | DUMPRSRC | DISASSEMBLE;
             break;
