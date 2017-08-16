@@ -454,21 +454,47 @@ word resource_type[MAXARGS] = {0};
 word resource_id[MAXARGS] = {0};
 word resource_count = 0;
 
+static const char help_message[] =
+"dumpne: tool to disassemble and print information from NE files.\n"
+"Usage: dumpne [options] <file(s)>\n"
+"Available options:\n"
+"\t-a, --resource                       Print embedded resources.\n"
+"\t-d, --disassemble                    Print disassembled machine code.\n"
+"\t-f, --file-headers                   Print contents of the overall file header.\n"
+"\t-h, --help                           Display this help message.\n"
+"\t-M, --disassembler-options=[...]     Extended options for disassembly.\n"
+"\t\tatt        Alias for `gas'.\n"
+"\t\tgas        Use GAS syntax for disassembly.\n"
+"\t\tintel      Alias for `masm'.\n"
+"\t\tmasm       Use MASM syntax for disassembly.\n"
+"\t\tnasm       Use NASM syntax for disassembly.\n"
+"\t-o, --specfile                       Create a specfile from exports.\n"
+"\t-s, --full-contents                  Display all information (default).\n"
+"\t-v, --version                        Print the version number of dumpne.\n"
+;
+
 static const struct option long_options[] = {
-    {"disassemble",   optional_argument, NULL, 'd'},
-    {"dump-header",   no_argument,       NULL, 'h'},
-    {"specfile",      no_argument,       NULL, 'o'},
-    {"dump-resource", optional_argument, NULL, 'r'},
-    {"full-contents", no_argument,       NULL, 's'},
-    {0,0,0,0}
+    {"resource",                optional_argument,  NULL, 'a'},
+    {"disassemble",             no_argument,        NULL, 'd'},
+    {"file-headers",            no_argument,        NULL, 'f'},
+//  {"gas",                     no_argument,        NULL, 'G'},
+    {"help",                    no_argument,        NULL, 'h'},
+//  {"masm",                    no_argument,        NULL, 'I'}, /* for "Intel" */
+    {"disassembler-options",    required_argument,  NULL, 'M'},
+//  {"nasm",                    no_argument,        NULL, 'N'},
+    {"specfile",                no_argument,        NULL, 'o'},
+    {"full-contents",           no_argument,        NULL, 's'},
+    {"version",                 no_argument,        NULL, 'v'},
+    {0}
 };
 
 int main(int argc, char *argv[]){
     int opt;
 
     mode = 0;
+    asm_syntax = NASM;
     
-    while ((opt = getopt_long(argc, argv, "d::hor::s", long_options, NULL)) >= 0){
+    while ((opt = getopt_long(argc, argv, "a::dhMos", long_options, NULL)) >= 0){
         switch (opt) {
         case 'd': /* disassemble only */
             mode |= DISASSEMBLE;
@@ -483,9 +509,23 @@ int main(int argc, char *argv[]){
                 }
             }
             break;
-        case 'h': /* dump header only */
+        case 'f': /* dump header only */
             mode |= DUMPHEADER;
             break;
+        case 'h': /* help */
+            printf(help_message);
+            return 0;
+        case 'M': /* additional options */
+            if (!strcmp(optarg, "att") || !strcmp(optarg, "gas"))
+                asm_syntax = GAS;
+            else if (!strcmp(optarg, "intel") || !strcmp(optarg, "masm"))
+                asm_syntax = MASM;
+            else if (!strcmp(optarg, "nasm"))
+                asm_syntax = NASM;
+            else {
+                fprintf(stderr, "Unrecognized disassembly option `%s'.\n", optarg);
+                return 1;
+            }
         case 'o': /* make a specfile */
             mode = SPECFILE;
             break;
@@ -528,18 +568,16 @@ int main(int argc, char *argv[]){
         case 's': /* dump everything */
             mode |= DUMPHEADER | DUMPRSRC | DISASSEMBLE;
             break;
+        case 'v': /* version */
+            printf("dumpne version 1.0\n");
         default: /* '?' */
-            /* todo: probably just print the whole help message here */
-            fprintf(stderr, "Usage: dumpne (-d|-h|-r|-s) <file>\n");
+            fprintf(stderr, "Usage: dumpne [options] <file>\n");
             return 1;
         }
     }
 
     if (mode == 0)
-        mode = ~0;
-
-    /* todo */
-    asm_syntax = MASM;
+        mode = DUMPHEADER | DUMPRSRC | DISASSEMBLE;
 
     if (optind == argc)
         printf("No input given\n");
