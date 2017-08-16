@@ -129,11 +129,23 @@ static const char *const exetypes[] = {
 };
 
 void print_header(struct header_ne *header){
+    /* Still need to deal with:
+     *
+     * 34 - number of resource segments (all of my testcases return 0)
+     * 38 - offset to return thunks (have testcases)
+     * 3a - offset to segment ref. bytes (same)
+     */
+
     printf("Linker version: %d.%d\n", header->ne_ver, header->ne_rev); /* 02 */
     printf("Checksum: %08x\n", header->ne_crc); /* 08 */
     print_flags(header->ne_flags); /* 0c */
+    printf("Automatic data segment: %d\n", header->ne_autodata);
+    if (header->ne_unused != 0)
+        warn("Header byte at position 0f has value 0x%02x.\n", header->ne_unused);
     printf("Heap size: %d bytes\n", header->ne_heap); /* 10 */
     printf("Stack size: %d bytes\n", header->ne_stack); /* 12 */
+    printf("Program entry point: %d:%04x\n", header->ne_cs, header->ne_ip); /* 14 */
+    printf("Initial stack location: %d:%04x\n", header->ne_ss, header->ne_sp); /* 18 */
     if (header->ne_exetyp <= 5) /* 36 */
         printf("Target OS: %s\n", exetypes[header->ne_exetyp]);
     else
@@ -210,6 +222,7 @@ static unsigned get_entry_table(long start, entry **table) {
     int count = 0;
     entry *ret = NULL;
     unsigned i;
+    word w;
 
     /* get a count */
     fseek(f, start, SEEK_SET);
@@ -228,7 +241,8 @@ static unsigned get_entry_table(long start, entry **table) {
         for (i = 0; i < length; i++) {
             if (index == 0xff) {
                 ret[count].flags = read_byte();
-                fseek(f, 2, SEEK_CUR); /* CD 3F */
+                if ((w = read_word()) != 0x3fcd)
+                    warn("Entry %d has interrupt bytes %02x %02x (expected 3f cd).\n", count+1, w & 0xff, w >> 16);
                 ret[count].segment = read_byte();
                 ret[count].offset = read_word();
             } else if (index == 0x00) {
@@ -360,8 +374,6 @@ void dump_file(char *file){
     import_name_table = NULL;
     import_module_table = NULL;
 
-    fprintf(stderr, "%s\n", file);
-
     f = fopen(file, "r");
     if (!f) {
         fprintf(stderr, "Cannot open %s: %s\n", file, strerror(errno));
@@ -384,13 +396,13 @@ void dump_file(char *file){
     fread(&header, sizeof(header), 1, f);
 
     if (header.ne_magic == 0x4550){
-        fprintf(stderr, "PE header found\n");
+        fprintf(stderr, "Cannot read %s: PE header found.\n", file);
         goto done;
     } else if (header.ne_magic != 0x454e){
         if (mz)
-            fprintf(stderr, "MZ header found but no NE header\n");
+            fprintf(stderr, "Cannot read %s: MZ header found but no NE header.\n", file);
         else
-            fprintf(stderr, "no NE header found\n");
+            fprintf(stderr, "Cannot read %s: No NE header found.\n", file);
         goto done;
     }
 
@@ -435,10 +447,8 @@ void dump_file(char *file){
         if (header.ne_rsrctab != header.ne_restab)
             print_rsrc(offset_ne + header.ne_rsrctab);
         else
-            printf("no resource table\n");
+            printf("No resource table\n");
     }
-
-//    printf("%s:\t%04x %04x %04x %04x %04x %04x %04x\n", file, header.ne_segtab, header.ne_rsrctab, header.ne_restab, header.ne_modtab, header.ne_imptab, header.ne_enttab, header.ne_nrestab);
 
 done:
     free_entry_table(entry_table, entry_count);
