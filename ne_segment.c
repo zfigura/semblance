@@ -2040,6 +2040,9 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
      * relocation data for all segments.) */
     for (i = 0; i < entry_count; i++) {
 
+        /* don't scan exported values */
+        if (entry_table[i].segment == 0xfe) continue;
+
         /* Annoyingly, data can be put in code segments, and without any
          * apparent indication that it is not code. As a dumb heuristic,
          * only scan exported entries—this won't work universally, and it
