@@ -11,19 +11,23 @@
 #include "semblance.h"
 #include "ne.h"
 
+#pragma pack(1)
+
 struct header_bitmap_info {
-    dword biSize;
-    dword biWidth;
-    dword biHeight;
-    word  biPlanes;
-    word  biBitCount;
-    dword biCompression;
-    dword biSizeImage;
-    dword biXPelsPerMeter;
-    dword biYPelsPerMeter;
-    dword biClrUsed;
-    dword biClrImportant;
+    dword biSize;           /* 00 */
+    dword biWidth;          /* 04 */
+    dword biHeight;         /* 08 */
+    word  biPlanes;         /* 0c */
+    word  biBitCount;       /* 0e */
+    dword biCompression;    /* 10 */
+    dword biSizeImage;      /* 14 */
+    dword biXPelsPerMeter;  /* 18 */
+    dword biYPelsPerMeter;  /* 1c */
+    dword biClrUsed;        /* 20 */
+    dword biClrImportant;   /* 24 */
 };
+
+STATIC_ASSERT(sizeof(struct header_bitmap_info) == 0x28);
 
 static void print_string_resource(long ptr){
     char length;
@@ -953,6 +957,8 @@ struct resource {
     word handle; /* fixme: what is this? */
     word usage; /* fixme: what is this? */
 };
+
+STATIC_ASSERT(sizeof(struct resource) == 0xc);
 
 void print_rsrc(long start){
     word align = read_word();

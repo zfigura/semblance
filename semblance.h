@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#pragma pack(1)
+#define STATIC_ASSERT(e) extern void STATIC_ASSERT_(int [(e)?1:-1])
 
 typedef uint8_t byte;
 typedef uint16_t word;
@@ -52,9 +52,10 @@ word mode; /* program options */
 #define DISASSEMBLE_ALL 0x20
 #define SPECFILE        0x80
 
-#define GAS     1
-#define NASM    2
-#define MASM    3
-word asm_syntax;
+enum {
+    GAS,
+    NASM,
+    MASM,
+} asm_syntax;
 
 #endif /* SEMBLANCE_H */

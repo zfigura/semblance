@@ -8,6 +8,8 @@
 #include "semblance.h"
 #include "ne.h"
 
+#pragma pack(1)
+
 struct header_ne {
     word  ne_magic;             /* 00 NE signature 'NE' */
     byte  ne_ver;               /* 02 Linker version number */
@@ -44,6 +46,8 @@ struct header_ne {
     byte  ne_expver_min;        /* 3e Expected Windows version number (minor) */
     byte  ne_expver_maj;        /* 3f Expected Windows version number (major) */
 };
+
+STATIC_ASSERT(sizeof(struct header_ne) == 0x40);
 
 static void print_flags(word flags){
     char buffer[1024];
@@ -585,7 +589,6 @@ int main(int argc, char *argv[]){
         mode = DUMPHEADER | DUMPRSRC | DISASSEMBLE;
 
     fprintf(stderr, "%x\n", mode);
-//    return 0;
 
     if (optind == argc)
         printf("No input given\n");
