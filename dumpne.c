@@ -476,6 +476,7 @@ static const char help_message[] =
 static const struct option long_options[] = {
     {"resource",                optional_argument,  NULL, 'a'},
     {"disassemble",             no_argument,        NULL, 'd'},
+    {"disassemble-all",         no_argument,        NULL, 'D'},
     {"file-headers",            no_argument,        NULL, 'f'},
 //  {"gas",                     no_argument,        NULL, 'G'},
     {"help",                    no_argument,        NULL, 'h'},
@@ -494,7 +495,7 @@ int main(int argc, char *argv[]){
     mode = 0;
     asm_syntax = NASM;
     
-    while ((opt = getopt_long(argc, argv, "a::dhMos", long_options, NULL)) >= 0){
+    while ((opt = getopt_long(argc, argv, "a::dDfhMosv", long_options, NULL)) >= 0){
         switch (opt) {
         case 'd': /* disassemble only */
             mode |= DISASSEMBLE;
@@ -508,6 +509,9 @@ int main(int argc, char *argv[]){
                     return 1;
                 }
             }
+            break;
+        case 'D': /* disassemble all */
+            mode |= DISASSEMBLE|DISASSEMBLE_ALL;
             break;
         case 'f': /* dump header only */
             mode |= DUMPHEADER;
@@ -526,6 +530,7 @@ int main(int argc, char *argv[]){
                 fprintf(stderr, "Unrecognized disassembly option `%s'.\n", optarg);
                 return 1;
             }
+            break;
         case 'o': /* make a specfile */
             mode = SPECFILE;
             break;
@@ -578,6 +583,9 @@ int main(int argc, char *argv[]){
 
     if (mode == 0)
         mode = DUMPHEADER | DUMPRSRC | DISASSEMBLE;
+
+    fprintf(stderr, "%x\n", mode);
+//    return 0;
 
     if (optind == argc)
         printf("No input given\n");

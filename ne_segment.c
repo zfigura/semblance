@@ -1742,17 +1742,28 @@ static void print_disassembly(const segment *seg) {
     int is32 = (seg->flags & 0x2000);
 
     while (ip < seg->length) {
+        fseek(f, seg->start+ip, SEEK_SET);
+
         /* find a valid instruction */
         if (!(seg->instr_flags[ip] & INSTR_VALID)) {
-            printf("     ...\n");
-            while ((ip < seg->length) && !(seg->instr_flags[ip] & INSTR_VALID)) ip++;
+            if (mode & DISASSEMBLE_ALL) {
+                /* still skip zeroes */
+                if (read_byte() == 0) {
+                    printf("     ...\n");
+                    ip++;
+                }
+                while (read_byte() == 0) ip++;
+            } else {
+                printf("     ...\n");
+                while ((ip < seg->length) && !(seg->instr_flags[ip] & INSTR_VALID)) ip++;
+            }
         }
 
-        if (ip == seg->length) return;
+        fseek(f, seg->start+ip, SEEK_SET);
+        if (ip >= seg->length) return;
 
         /* Instructions can "hang over" the end of a segment.
          * Zero should be supplied. */
-        fseek(f, seg->start+ip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));
         if ((unsigned) seg->length-ip < sizeof(buffer))
             fread(buffer, 1, seg->length-ip, f);

@@ -49,6 +49,7 @@ word mode; /* program options */
 #define DUMPEXPORT      0x04
 #define DUMPIMPORTMOD   0x08
 #define DISASSEMBLE     0x10
+#define DISASSEMBLE_ALL 0x20
 #define SPECFILE        0x80
 
 #define GAS     1
