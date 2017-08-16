@@ -596,7 +596,7 @@ int main(int argc, char *argv[]){
     }
 
     if (mode == 0)
-        mode = DUMPHEADER | DUMPRSRC | DISASSEMBLE;
+        mode = DUMPHEADER | DUMPEXPORT | DUMPIMPORTMOD | DUMPRSRC | DISASSEMBLE;
 
     fprintf(stderr, "%x\n", mode);
 
