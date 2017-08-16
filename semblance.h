@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "config.h"
 
 #define STATIC_ASSERT(e) extern void STATIC_ASSERT_(int [(e)?1:-1])
 
@@ -33,8 +34,6 @@ static inline dword read_dword(){
 static inline void skip_padding(char bytes){
     fseek(f, ((bytes-1) & (bytes-(ftell(f)%bytes)))*sizeof(byte), SEEK_CUR);
 }
-
-#define USE_WARN        1
 
 #ifdef USE_WARN
 #define warn(...)       fprintf(stderr, "Warning: " __VA_ARGS__)
