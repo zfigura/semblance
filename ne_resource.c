@@ -1,9 +1,5 @@
 /* Function(s) for dumping resources from NE files */
 
-/* General TODO: add more sanity checks. In particular all of the times that
- * only one structure supposedly exists, we should check if the length/key/whatever
- * doesn't match anything and print an error if it doesn't. */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -129,25 +125,15 @@ static const char *const rsrc_bmp_compression[] = {
     0
 };
 
-/* todo: it is probably better just to fold this into the header, because
- * otherwise it loos like it is resource-specific. */
 static void print_rsrc_flags(word flags){
-    char buffer[1024];
-    buffer[0] = 0;
-
     if (flags & 0x0010)
-        strcat(buffer, ", moveable");
+        printf(", moveable");
     if (flags & 0x0020)
-        strcat(buffer, ", shareable");
+        printf(", shareable");
     if (flags & 0x0040)
-        strcat(buffer, ", preloaded");
+        printf(", preloaded");
     if (flags & 0xff8f)
-        sprintf(buffer+strlen(buffer), ", (unknown flags 0x%04x)", flags & 0xff8f);
-
-    if(buffer[0])
-        printf("    Flags: 0x%04x (%s)\n", flags, buffer+2);
-    else
-        printf("    Flags: 0x0000\n");
+        printf(", (unknown flags 0x%04x)", flags & 0xff8f);
 }
 
 /* There are a lot of styles here and most of them would require longer
@@ -206,18 +192,18 @@ static void print_rsrc_dialog_style(dword flags){
 }
 
 static const char *const rsrc_button_type[] = {
-    "BS_PUSHBUTTON",    /* 0 */
-    "BS_DEFPUSHBUTTON", /* 1 */
-    "BS_CHECKBOX",      /* 2 */
-    "BS_AUTOCHECKBOX",  /* 3 */
-    "BS_RADIOBUTTON",   /* 4 */
-    "BS_3STATE",        /* 5 */
-    "BS_AUTO3STATE",    /* 6 */
-    "BS_GROUPBOX",      /* 7 */
-    "BS_USERBUTTON",    /* 8 */
-    "BS_AUTORADIOBUTTON", /* 9 */
-    "BS_PUSHBOX",       /* 10 */
-    "BS_OWNERDRAW",     /* 11 */
+    "BS_PUSHBUTTON",        /* 0 */
+    "BS_DEFPUSHBUTTON",     /* 1 */
+    "BS_CHECKBOX",          /* 2 */
+    "BS_AUTOCHECKBOX",      /* 3 */
+    "BS_RADIOBUTTON",       /* 4 */
+    "BS_3STATE",            /* 5 */
+    "BS_AUTO3STATE",        /* 6 */
+    "BS_GROUPBOX",          /* 7 */
+    "BS_USERBUTTON",        /* 8 */
+    "BS_AUTORADIOBUTTON",   /* 9 */
+    "BS_PUSHBOX",           /* 10 */
+    "BS_OWNERDRAW",         /* 11 */
     "(unknown type 12)",
     "(unknown type 13)",
     "(unknown type 14)",
@@ -257,7 +243,7 @@ static const char *const rsrc_static_type[] = {
     "SS_WHITEFRAME",    /* 9 */
     "SS_USERITEM",      /* 10 */
     "SS_SIMPLE",        /* 11 */
-    "SS_LEFTNOWORDWRAP", /* 12 */
+    "SS_LEFTNOWORDWRAP",/* 12 */
     "SS_OWNERDRAW",     /* 13 */
     "SS_BITMAP",        /* 14 */
     "SS_ENHMETAFILE",   /* 15 */
@@ -493,29 +479,32 @@ static const char *const rsrc_dialog_class[] = {
  * describing the second. However it seems the second is always
  * a VS_FIXEDFILEINFO header, so we ignore most of those details. */
 struct version_header {
-    word length;
-    word value_length; /* always 52 (0x34), the length of the second header */
+    word length;            /* 00 */
+    word value_length;      /* 02 - always 52 (0x34), the length of the second header */
     /* the "type" field given by Windows is missing */
-    byte string[16]; /* the fixed string VS_VERSION_INFO\0 */
-    dword magic; /* 0xfeef04bd */
-    word struct_2; /* seems to always be 1.0 */
-    word struct_1;
-    word file_2; /* 1.2.3.4 &c. */
-    word file_1;
-    word file_4;
-    word file_3;
-    word prod_2; /* always the same as the above? */
-    word prod_1;
-    word prod_4;
-    word prod_3;
-    dword flags_file_mask; /* always 2 or 3f...? */
-    dword flags_file;
-    dword flags_os;
-    dword flags_type;
-    dword flags_subtype;
-    dword date_1; /* always 0? */
-    dword date_2;
+    byte string[16];        /* 04 - the fixed string VS_VERSION_INFO\0 */
+    dword magic;            /* 14 - 0xfeef04bd */
+    word struct_2;          /* 18 - seems to always be 1.0 */
+    word struct_1;          /* 1a */
+    /* 1.2.3.4 &c. */
+    word file_2;            /* 1c */
+    word file_1;            /* 1e */
+    word file_4;            /* 20 */
+    word file_3;            /* 22 */
+    word prod_2;            /* 24 - always the same as the above? */
+    word prod_1;            /* 26 */
+    word prod_4;            /* 28 */
+    word prod_3;            /* 2a */
+    dword flags_file_mask;  /* 2c - always 2 or 3f...? */
+    dword flags_file;       /* 30 */
+    dword flags_os;         /* 34 */
+    dword flags_type;       /* 38 */
+    dword flags_subtype;    /* 3c */
+    dword date_1;           /* 40 - always 0? */
+    dword date_2;           /* 44 */
 };
+
+STATIC_ASSERT(sizeof(struct version_header) == 0x48);
 
 static const char *const rsrc_version_file[] = {
     "VS_FF_DEBUG",        /* 0001 */
@@ -540,19 +529,19 @@ static const char *const rsrc_version_type[] = {
 };
 
 static const char *const rsrc_version_subtype_drv[] = {
-    "unknown",     /* 0 VFT2_UNKNOWN */
-    "printer",     /* 1 VFT2_DRV_PRINTER etc. */
-    "keyboard",    /* 2 */
-    "language",    /* 3 */
-    "display",     /* 4 */
-    "mouse",       /* 5 */
-    "network",     /* 6 */
-    "system",      /* 7 */
-    "installable", /* 8 */
-    "sound",       /* 9 */
-    "communications",    /* 10 */
-    "input method",      /* 11, found in WINE */
-    "versioned printer", /* 12 */
+    "unknown",              /* 0 VFT2_UNKNOWN */
+    "printer",              /* 1 VFT2_DRV_PRINTER etc. */
+    "keyboard",             /* 2 */
+    "language",             /* 3 */
+    "display",              /* 4 */
+    "mouse",                /* 5 */
+    "network",              /* 6 */
+    "system",               /* 7 */
+    "installable",          /* 8 */
+    "sound",                /* 9 */
+    "communications",       /* 10 */
+    "input method",         /* 11, found in WINE */
+    "versioned printer",    /* 12 */
     0
 };
 
@@ -703,13 +692,14 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
             fseek(f, -sizeof(dword), SEEK_CUR);
             fread(&header, sizeof(header), 1, f);
         } else {
-            printf("    Unknown header size %d\n", header.biSize);
+            warn("Unknown bitmap header size %d.\n", header.biSize);
             break;
         }
 
         printf("    Size: %dx%dx%d\n", header.biWidth,
                header.biHeight/2, header.biBitCount);
-        /* skip color planes since it should always be 1 */
+        if (header.biPlanes != 1)
+            warn("Bitmap specifies %d color planes (expected 1).\n", header.biPlanes);
         if (header.biCompression <= 13 && rsrc_bmp_compression[header.biCompression])
             printf("    Compression: %s\n", rsrc_bmp_compression[header.biCompression]);
         else
@@ -732,12 +722,12 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
         word offset = read_word();
         long cursor;
         if (extended > 1){
-            printf("    Unknown menu version %d\n",extended);
+            warn("Unknown menu version %d\n",extended);
             break;
         }
         printf(extended ? "    Type: extended" : "    Type: standard");
         if (offset != extended*4)
-            printf("    Unexpected offset value %d\n", offset);
+            warn("Unexpected offset value %d (expected %d)\n", offset, extended*4);
         if (extended){
             printf("    Help ID: %d\n", read_dword());
             /* todo */
@@ -839,27 +829,37 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
          * Fortunately, the headers are different but the relevant information
          * is stored in the same bytes. */
         word count;
-        char *buffer;
-        char buffer_len = 0;
         long cursor;
         fseek(f, 2*sizeof(word), SEEK_CUR);
         count = read_word();
-        buffer = malloc(count * sizeof(char) * 8); /* ", #12345" */
-        while (count--){
+        printf("    Resources: ");
+        if (count--) {
             fseek(f, 6*sizeof(word), SEEK_CUR);
-            buffer_len += sprintf(buffer+buffer_len, ", #%d", read_word());
+            printf("#%d", read_word());
         }
-        printf("    Resources: %s\n", buffer+2);
-        free(buffer);
+        while (count--) {
+            fseek(f, 6*sizeof(word), SEEK_CUR);
+            printf(", #%d", read_word());
+        }
+        printf("\n");
     }
     break;
     case 0x8010: /* Version */
     {
         struct version_header header;
         word info_length; /* for the String/VarFileInfo */
+        word value_length; /* fixme: what is this? */
         char info_type;
         long cursor;
         fread(&header, sizeof(header), 1, f);
+        if (header.value_length != 52)
+            warn("Version header length is %d (expected 52).\n", header.value_length);
+        if (strcmp(header.string, "VS_VERSION_INFO"))
+            warn("Version header is %.16s (expected VS_VERSION_INFO).\n", header.string);
+        if (header.magic != 0xfeef04bd)
+            warn("Version magic number is 0x%08x (expected 0xfeef04bd).\n", header.magic);
+        if (header.struct_1 != 1 || header.struct_2 != 0)
+            warn("Version header version is %d.%d (expected 1.0).\n", header.struct_1, header.struct_2);
         print_rsrc_version_flags(header);
 
         printf("    File version:    %d.%d.%d.%d\n",
@@ -867,23 +867,25 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
         printf("    Product version: %d.%d.%d.%d\n",
                header.prod_1, header.prod_2, header.prod_3, header.prod_4);
 
+        if (0) {
         printf("    Created on: ");
         print_timestamp(header.date_1, header.date_2);
         putchar('\n');
+        }
 
         /* header's out of the way, now we have to possibly parse a StringFileInfo */
-        if (header.length == 0x48)
+        if (header.length == sizeof(struct version_header))
             return; /* I don't have any testcases available so I think this is correct */
 
         cursor = ftell(f);
         info_length = read_word();
-        fseek(f, sizeof(word), SEEK_CUR); /* ValueLength, which always == 0 */
+        value_length = read_word();
         /* "type" is again omitted */
         if ((info_type = read_byte()) == 'S'){
             /* we have a StringFileInfo */
             fseek(f, 15*sizeof(byte), SEEK_CUR);
             print_rsrc_stringfileinfo(cursor+info_length);
-            if (header.length == (0x48 + info_length))
+            if (header.length == (sizeof(struct version_header) + info_length))
                 return;
 
             info_length = read_word();
@@ -896,9 +898,11 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
             fseek(f, 11*sizeof(byte), SEEK_CUR);
             print_rsrc_varfileinfo(cursor+info_length);
         } else {
-            printf("Unrecognized file info key: ");
+            char c;
+            warn("Unrecognized file info key: ");
             fseek(f, -sizeof(byte), SEEK_CUR);
-            print_escaped_string0();
+            while ((c = read_byte())) fputc(c, stderr);
+            printf("\n");
         }
     }
     break;
@@ -996,8 +1000,9 @@ void print_rsrc(long start){
             else
                 print_string_resource(start+rn.id);
 
-            printf(" (offset = 0x%x, length = %d [0x%x]):\n", rn.offset << align, rn.length << align, rn.length << align);
-            if(0) print_rsrc_flags(rn.flags);
+            printf(" (offset = 0x%x, length = %d [0x%x]", rn.offset << align, rn.length << align, rn.length << align);
+            print_rsrc_flags(rn.flags);
+            printf("):\n");
 
             print_rsrc_resource(type_id, rn.offset << align, rn.length << align, rn.id);
             fseek(f, cursor, SEEK_SET);
