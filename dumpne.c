@@ -319,7 +319,7 @@ static void load_exports(import_module *module) {
 static void get_import_module_table(long start, import_module **table, word count) {
     import_module *ret = NULL;
     word offset;
-    word length;
+    byte length;
     unsigned i;
 
     fseek(f, start, SEEK_SET);
@@ -330,7 +330,8 @@ static void get_import_module_table(long start, import_module **table, word coun
         ret[i].name = malloc((length+1)*sizeof(char));
         memcpy(ret[i].name, &import_name_table[offset+1], length);
         ret[i].name[length] = 0;
-        load_exports(&ret[i]);
+        if (mode & DISASSEMBLE)
+            load_exports(&ret[i]);
     }
 
     *table = ret;
@@ -597,8 +598,6 @@ int main(int argc, char *argv[]){
 
     if (mode == 0)
         mode = DUMPHEADER | DUMPEXPORT | DUMPIMPORTMOD | DUMPRSRC | DISASSEMBLE;
-
-    fprintf(stderr, "%x\n", mode);
 
     if (optind == argc)
         printf("No input given\n");
