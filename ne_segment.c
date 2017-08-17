@@ -130,6 +130,7 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
             } else if (instr.op.arg0 == PTR32 && r->size == 2 && r->type == 0) {
                 /* segment relocation on 32-bit pointer; copy the segment but keep the offset */
                 sprintf(arg0, "%d:%04x", r->target_segment, instr.arg0);
+                comment = get_entry_name(r->target_segment, instr.arg0);
             } else if (instr.op.arg0 == IMM && r->size == 2) {
                 /* imm16 referencing a segment directly */
                 if (r->type == 0)
