@@ -893,27 +893,31 @@ void print_arg(word cs, word ip, char *out, dword value, enum arg argtype, instr
         strcat(out, (asm_syntax == GAS) ? "$0x1" : "1h");
         break;
     case IMM8:
-        if (asm_syntax == GAS)
-            sprintf(out, "$0x%02x", value);
-        else if ((instr->op.size == 32) && (instr->op.flags & OP_STACK))
-            sprintf(out, "dword %02Xh", value);
-        else
-            sprintf(out, "%02Xh", value);
+        if (instr->op.flags & OP_STACK) { /* 6a */
+            if (instr->op.size == 32)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "dword %08Xh", (dword) (int8_t) value);
+            else
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "word %04Xh", (word) (int8_t) value);
+        } else
+            sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
         break;
     case IMM16:
         sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
         break;
     case IMM:
-        if (instr->op.size == 8)
-            sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
-        else if (instr->op.size == 16)
-            sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
-        else if (instr->op.size == 32 && asm_syntax == GAS)
-            sprintf(out, "$0x%08x", value);
-        else if (instr->op.size == 32 && (instr->op.flags & OP_STACK))
-            sprintf(out, "dword %08Xh", value);
-        else
-            sprintf(out, "%08Xh", value);
+        if (instr->op.flags & OP_STACK) {
+            if (instr->op.size == 32)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "dword %08Xh", value);
+            else
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "word %04Xh", value);
+        } else {
+            if (instr->op.size == 8)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
+            else if (instr->op.size == 16)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
+            else if (instr->op.size == 32)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "%08Xh", value);
+        }
         break;
     case REL8:
     case REL16:
