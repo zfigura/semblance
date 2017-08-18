@@ -35,26 +35,4 @@ static inline void skip_padding(char bytes){
     fseek(f, ((bytes-1) & (bytes-(ftell(f)%bytes)))*sizeof(byte), SEEK_CUR);
 }
 
-#ifdef USE_WARN
-#define warn(...)       fprintf(stderr, "Warning: " __VA_ARGS__)
-#else
-#define warn(...)
-#endif
-
-word mode; /* program options */
-
-#define DUMPHEADER      0x01
-#define DUMPRSRC        0x02
-#define DUMPEXPORT      0x04
-#define DUMPIMPORTMOD   0x08
-#define DISASSEMBLE     0x10
-#define DISASSEMBLE_ALL 0x20
-#define SPECFILE        0x80
-
-enum {
-    GAS,
-    NASM,
-    MASM,
-} asm_syntax;
-
 #endif /* SEMBLANCE_H */

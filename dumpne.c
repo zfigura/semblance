@@ -190,6 +190,33 @@ void print_specfile(char *module_name, entry *entry_table, int count) {
     fclose(specfile);
 }
 
+static char *demangle(char *func) {
+    char buffer[256];
+    char classname[256];
+    char *start, *end;
+
+    /* First get the classname. This is in reverse order, so
+     * find the first @@ and work backwards from there. */
+    classname[0] = 0;
+    start = end = strstr(func, "@@");
+    while (1) {
+        start--;
+        while (*start != '?' && *start != '@') start--;
+        strncat(classname, start+1, end-(start+1));
+        if (*start == '?') break;
+        strcat(classname, "::");
+        end = start;
+    }
+
+    warn("%s\n", classname);
+
+    strcpy(buffer, classname);
+
+    func = realloc(func, (strlen(buffer)+1)*sizeof(char));
+    strcpy(func, buffer);
+    return func;
+}
+
 /* return the first entry (module name/desc) */
 static char *read_res_name_table(long start, entry *entry_table){
     /* reads (non)resident names into our entry table */
@@ -211,6 +238,10 @@ static char *read_res_name_table(long start, entry *entry_table){
         fread(name, sizeof(char), length, f);
         name[length] = 0;   /* null term */
         ordinal = read_word();
+
+        if ((opts & DEMANGLE) && name[0] == '?')
+            name = demangle(name);
+
         entry_table[ordinal-1].name = name;
     }
 
@@ -308,6 +339,10 @@ static void load_exports(import_module *module) {
         }
         p++;
         module->exports[count].name = strdup(p);
+
+        if ((opts & DEMANGLE) && module->exports[count].name[0] == '?')
+            module->exports[count].name = demangle(module->exports[count].name);
+
         count++;
     }
 
@@ -326,10 +361,11 @@ static void get_import_module_table(long start, import_module **table, word coun
     ret = malloc(count*sizeof(import_module));
     for (i = 0; i < count; i++) {
         offset = read_word();
-        length  = import_name_table[offset];
+        length = import_name_table[offset];
         ret[i].name = malloc((length+1)*sizeof(char));
         memcpy(ret[i].name, &import_name_table[offset+1], length);
         ret[i].name[length] = 0;
+
         if (mode & DISASSEMBLE)
             load_exports(&ret[i]);
     }
@@ -490,6 +526,7 @@ static const char help_message[] =
 
 static const struct option long_options[] = {
     {"resource",                optional_argument,  NULL, 'a'},
+    {"demangle",                no_argument,        NULL, 'C'},
     {"disassemble",             no_argument,        NULL, 'd'},
     {"disassemble-all",         no_argument,        NULL, 'D'},
     {"file-headers",            no_argument,        NULL, 'f'},
@@ -508,9 +545,10 @@ int main(int argc, char *argv[]){
     int opt;
 
     mode = 0;
+    opts = 0;
     asm_syntax = NASM;
     
-    while ((opt = getopt_long(argc, argv, "a::dDfhMosv", long_options, NULL)) >= 0){
+    while ((opt = getopt_long(argc, argv, "a::CdDfhMosv", long_options, NULL)) >= 0){
         switch (opt) {
         case 'a': /* dump resources only */
         {
@@ -548,6 +586,9 @@ int main(int argc, char *argv[]){
             }
             break;
         }
+        case 'C': /* demangle */
+            opts |= DEMANGLE;
+            break;
         case 'd': /* disassemble only */
             mode |= DISASSEMBLE;
             if (optarg){
@@ -562,7 +603,7 @@ int main(int argc, char *argv[]){
             }
             break;
         case 'D': /* disassemble all */
-            mode |= DISASSEMBLE|DISASSEMBLE_ALL;
+            opts |= DISASSEMBLE_ALL;
             break;
         case 'f': /* dump header only */
             mode |= DUMPHEADER;
@@ -597,7 +638,7 @@ int main(int argc, char *argv[]){
     }
 
     if (mode == 0)
-        mode = DUMPHEADER | DUMPEXPORT | DUMPIMPORTMOD | DUMPRSRC | DISASSEMBLE;
+        mode = ~0;
 
     if (optind == argc)
         printf("No input given\n");
