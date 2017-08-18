@@ -2,8 +2,8 @@
 
 # start out
 AC_INIT([semblance], [1.0])
-AC_CONFIG_SRCDIR([semblance.h])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+AC_CONFIG_SRCDIR([src/semblance.h])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_ARG_ENABLE(warn, AS_HELP_STRING([--disable-warn],[do not print warnings]))
 
 # Check for availability of various components
