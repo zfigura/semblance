@@ -109,5 +109,6 @@ typedef struct {
 
 extern int get_instr(word cs, word ip, const byte *p, instr_info *instr, int is32);
 extern void print_arg(word cs, word ip, char *out, dword value, enum arg argtype, instr_info *instr, byte *usedmem);
+extern word get_prefix(byte opcode);
 
 #endif /* __X86_INSTR_H */

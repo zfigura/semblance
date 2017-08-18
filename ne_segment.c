@@ -85,6 +85,353 @@ static const char seg16[6][3] = {
     "es", "cs", "ss", "ds", "fs", "gs"
 };
 
+static const char reg8[8][3] = {
+    "al","cl","dl","bl","ah","ch","dh","bh"
+};
+
+static const char reg16[9][3] = {
+    "ax","cx","dx","bx","sp","bp","si","di",""
+};
+
+static void get_seg16(char *out, byte reg) {
+    if (asm_syntax == GAS)
+        strcat(out, "%");
+    strcat(out, seg16[reg]);
+}
+
+static void get_reg8(char *out, byte reg) {
+    if (asm_syntax == GAS)
+        strcat(out, "%");
+    strcat(out, reg8[reg]);
+}
+
+static void get_reg16(char *out, byte reg, word is32) {
+    if (reg <= 7) {
+        if (asm_syntax == GAS)
+            strcat(out, "%");
+        if (is32)
+            strcat(out, "e");
+        strcat(out, reg16[reg]);
+    }
+}
+
+static const char modrm16_gas[8][8] = {
+    "%bx,%si", "%bx,%di", "%bp,%si", "%bp,%di", "%si", "%di", "%bp", "%bx"
+};
+
+static const char modrm16_masm[8][6] = {
+    "bx+si", "bx+di", "bp+si", "bp+di", "si", "di", "bp", "bx"
+};
+
+
+/* With MASM/NASM, use capital letters to help disambiguate them from the following 'h'. */
+
+/* Parameters:
+ * cs, ip  - [i] current segment and instruction
+ * out     - [o] pointer to the output (string) buffer
+ * value   - [i] value of argument being processed
+ * argtype - [i] type of argument being processed
+ * instr   - [i] pointer to the relevant instr_info
+ * usedmem - [o] did we use a memory argument (needed for sanity checks)
+ */
+void print_arg(word cs, word ip, char *out, dword value, enum arg argtype, instr_info *instr, byte *usedmem) {
+    *out = '\0';
+
+    if (argtype >= AL && argtype <= BH)
+        get_reg8(out, argtype-AL);
+    else if (argtype >= AX && argtype <= DI)
+        get_reg16(out, argtype-AX, (instr->op.size == 32));
+    else if (argtype >= ES && argtype <= GS)
+        get_seg16(out, argtype-ES);
+
+    switch (argtype) {
+    case ONE:
+        strcat(out, (asm_syntax == GAS) ? "$0x1" : "1h");
+        break;
+    case IMM8:
+        if (instr->op.flags & OP_STACK) { /* 6a */
+            if (instr->op.size == 32)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "dword %08Xh", (dword) (int8_t) value);
+            else
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "word %04Xh", (word) (int8_t) value);
+        } else
+            sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
+        break;
+    case IMM16:
+        sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
+        break;
+    case IMM:
+        if (instr->op.flags & OP_STACK) {
+            if (instr->op.size == 32)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "dword %08Xh", value);
+            else
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "word %04Xh", value);
+        } else {
+            if (instr->op.size == 8)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
+            else if (instr->op.size == 16)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
+            else if (instr->op.size == 32)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "%08Xh", value);
+        }
+        break;
+    case REL8:
+    case REL16:
+        sprintf(out, "%04x", value);
+        break;
+    case PTR32:
+        /* should always be relocated */
+        break;
+    case MOFFS16:
+        sprintf(out, (asm_syntax == GAS) ? "0x%04x" : "[%04Xh]", value);
+        *usedmem = 1;
+        break;
+    case DSBX:
+    case DSSI:
+        if (asm_syntax != NASM) {
+            if (instr->prefix & PREFIX_SEG_MASK) {
+                get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
+                strcat(out, ":");
+            }
+            strcat(out, (asm_syntax == GAS) ? "(%" : "[");
+            if (instr->prefix & PREFIX_ADDR32)
+                strcat(out, "e");
+            strcat(out, (argtype == DSBX) ? "bx" : "si");
+            strcat(out, (asm_syntax == GAS) ? ")" : "]");
+        }
+        *usedmem = 1;
+        break;
+    case ESDI:
+        if (asm_syntax != NASM) {
+            strcat(out, (asm_syntax == GAS) ? "%es:(%" : "es:[");
+            if (instr->prefix & PREFIX_ADDR32)
+                strcat(out, "e");
+            strcat(out, "di");
+            strcat(out, (asm_syntax == GAS) ? ")" : "]");
+        }
+        *usedmem = 1;
+        break;
+    case ALS:
+        if (asm_syntax == GAS)
+            strcpy(out, "%al");
+        break;
+    case AXS:
+        if (asm_syntax == GAS)
+            strcpy(out, "%ax");
+        break;
+    case DXS:
+        if (asm_syntax == GAS)
+            strcpy(out, "(%dx)");
+        else if (asm_syntax == MASM)
+            strcpy(out, "dx");
+        break;
+    /* register/memory. this is always the first byte after the opcode,
+     * and is always either paired with a simple register or a subcode.
+     * there are a few cases where it isn't [namely C6/7 MOV and 8F POP]
+     * and we need to warn if we see a value there that isn't 0. */
+    case RM:
+    case MEM:
+        if (instr->modrm_disp == DISP_REG) {
+            if (argtype == MEM)
+                warn_at("ModRM byte has mod 3, but opcode only allows accessing memory.\n");
+
+            if (instr->op.size == 8)
+                get_reg8(out, instr->modrm_reg);
+            else
+                /* note: return a 16-bit register if the size is 0 */
+                get_reg16(out, instr->modrm_reg, (instr->op.size == 32));
+            break;
+        }
+
+        *usedmem = 1;
+
+        /* NASM: <size>    [<seg>: <reg>+<reg>+/-<offset>h] */
+        /* MASM: <size> ptr <seg>:[<reg>+<reg>+/-<offset>h] */
+        /* GAS:           *%<seg>:<->0x<offset>(%<reg>,%<reg>) */
+
+        if (asm_syntax == GAS) {
+            if (instr->op.opcode == 0xFF && instr->op.subcode >= 2 && instr->op.subcode <= 5)
+                strcat(out, "*");
+
+            if (instr->prefix & PREFIX_SEG_MASK) {
+                get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
+                strcat(out, ":");
+            }
+
+            /* offset */
+            if (instr->modrm_disp == DISP_8) {
+                int8_t svalue = (int8_t) value;
+                if (svalue < 0)
+                    sprintf(out+strlen(out), "-0x%02x", -svalue);
+                else
+                    sprintf(out+strlen(out), "0x%02x", svalue);
+            } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 16) {
+                int16_t svalue = (int16_t) value;
+                if (instr->modrm_reg == 8) {
+                    sprintf(out+strlen(out), "0x%04x", value);  /* absolute memory is unsigned */
+                    return;
+                }
+                if (svalue < 0)
+                    sprintf(out+strlen(out), "-0x%04x", -svalue);
+                else
+                    sprintf(out+strlen(out), "0x%04x", svalue);
+            } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 32) {
+                int32_t svalue = (int32_t) value;
+                if (instr->modrm_reg == 8) {
+                    sprintf(out+strlen(out), "0x%08x", value);  /* absolute memory is unsigned */
+                    return;
+                }
+                if (svalue < 0)
+                    sprintf(out+strlen(out), "-0x%08x", -svalue);
+                else
+                    sprintf(out+strlen(out), "0x%08x", svalue);
+            }
+
+            strcat(out, "(");
+
+            if (instr->addrsize == 16) {
+                strcat(out, modrm16_gas[instr->modrm_reg]);
+            } else {
+                get_reg16(out, instr->modrm_reg, 1);
+                if (instr->sib_index) {
+                    strcat(out, ",");
+                    get_reg16(out, instr->sib_index, 1);
+                    strcat(out, ",0");
+                    out[strlen(out)-1] = '0'+instr->sib_scale;
+                }
+            }
+            strcat(out, ")");
+        } else {
+            int has_sib = (instr->sib_scale != 0 && instr->sib_index < 8);
+            if (instr->op.flags & OP_FAR)
+                strcat(out, "far ");
+            else if (instr->op.arg0 != REG && instr->op.arg1 != REG) {
+                switch (instr->op.size) {
+                case  8: strcat(out, "byte "); break;
+                case 16: strcat(out, "word "); break;
+                case 32: strcat(out, "dword "); break;
+                case 64: strcat(out, "qword "); break;
+                case 80: strcat(out, "tword "); break;
+                default: break;
+                }
+                if (asm_syntax == MASM) /* && instr->op.size == 0? */
+                    strcat(out, "ptr ");
+            }
+
+            if (asm_syntax == NASM)
+                strcat(out, "[");
+
+            if (instr->prefix & PREFIX_SEG_MASK) {
+                get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
+                strcat(out, ":");
+            }
+
+            if (asm_syntax == MASM)
+                strcat(out, "[");
+
+            if (has_sib) {
+                get_reg16(out, instr->sib_index, 1);
+                strcat(out, "*0");
+                out[strlen(out)-1] = '0'+instr->sib_scale;
+            }
+
+            if (instr->modrm_reg < 8) {
+                if (has_sib)
+                    strcat(out, "+");
+                if (instr->addrsize == 16)
+                    strcat(out, modrm16_masm[instr->modrm_reg]);
+                else
+                    get_reg16(out, instr->modrm_reg, 1);
+            }
+
+            if (instr->modrm_disp == DISP_8) {
+                int8_t svalue = (int8_t) value;
+                if (svalue < 0)
+                    sprintf(out+strlen(out), "-%02Xh", -svalue);
+                else
+                    sprintf(out+strlen(out), "+%02Xh", svalue);
+            } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 16) {
+                int16_t svalue = (int16_t) value;
+                if (instr->modrm_reg == 8 && !has_sib)
+                    sprintf(out+strlen(out), "%04Xh", value);   /* absolute memory is unsigned */
+                else if (svalue < 0)
+                    sprintf(out+strlen(out), "-%04Xh", -svalue);
+                else
+                    sprintf(out+strlen(out), "+%04Xh", svalue);
+            } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 32) {
+                int32_t svalue = (int32_t) value;
+                if (instr->modrm_reg == 8 && !has_sib)
+                    sprintf(out+strlen(out), "%08Xh", value);   /* absolute memory is unsigned */
+                else if (svalue < 0)
+                    sprintf(out+strlen(out), "-%08Xh", -svalue);
+                else
+                    sprintf(out+strlen(out), "+%08Xh", svalue);
+            }
+            strcat(out, "]");
+        }
+        break;
+    case REG:
+        if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) /* mov*x */
+            get_reg8(out, value);
+        else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF)
+            get_reg16(out, value, 0);
+        else
+            /* note: return a 16-bit register if the size is 0 */
+            get_reg16(out, value, (instr->op.size == 32));
+        break;
+    case REG32:
+        get_reg16(out, value, 1);
+        break;
+    case SEG16:
+        if (value > 5)
+            warn_at("Invalid segment register %d\n", value);
+        get_seg16(out, value);
+        break;
+    case CR32:
+        if (value == 1 || value > 4)
+            warn_at("Invalid control register %d\n", value);
+        if (asm_syntax == GAS)
+            strcat(out, "%");
+        strcat(out, "cr0");
+        out[strlen(out)-1] = '0'+value;
+        break;
+    case DR32:
+        if (asm_syntax == GAS)
+            strcat(out, "%");
+        strcat(out, "dr0");
+        out[strlen(out)-1] = '0'+value;
+        break;
+    case TR32:
+        if (value < 3)
+            warn_at("Invalid test register %d\n", value);
+        if (asm_syntax == GAS)
+            strcat(out, "%");
+        strcat(out, "tr0");
+        out[strlen(out)-1] = '0'+value;
+        break;
+    case ST:
+        if (asm_syntax == GAS)
+            strcat(out, "%");
+        strcat(out, "st");
+        if (asm_syntax == NASM)
+            strcat(out, "0");
+        break;
+    case STX:
+        if (asm_syntax == GAS)
+            strcat(out, "%");
+        strcat(out, "st");
+        if (asm_syntax != NASM)
+            strcat(out, "(");
+        strcat(out, "0");
+        out[strlen(out)-1] = '0' + value;
+        if (asm_syntax != NASM)
+            strcat(out, ")");
+        break;
+    default:
+        break;
+    }
+}
+
 /* Returns the number of bytes processed (same as get_instr). */
 int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const reloc *reloc_data, word reloc_count, int is32) {
     instr_info instr = {0};
@@ -99,6 +446,15 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
     out[0] = 0;
 
     len = get_instr(cs, ip, p, &instr, is32);
+
+    /* did we find too many prefixes? */
+    if (get_prefix(instr.op.opcode)) {
+        if (get_prefix(instr.op.opcode) & PREFIX_SEG_MASK)
+            warn_at("Multiple segment prefixes found: %s, %s. Skipping to next instruction.\n",
+                    seg16[(instr.prefix & PREFIX_SEG_MASK)-1], instr.op.name);
+        else
+            warn_at("Prefix specified twice: %s. Skipping to next instruction.\n", instr.op.name);
+    }
 
     print_arg(cs, ip, arg0, instr.arg0, instr.op.arg0, &instr, &usedmem);
     print_arg(cs, ip, arg1, instr.arg1, instr.op.arg1, &instr, &usedmem);
@@ -176,6 +532,12 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
     /* check if we are referencing a named export */
     if (instr.op.arg0 == REL16 && !comment)
         comment = get_entry_name(cs, instr.arg0);
+
+    /* check that we have a valid instruction */
+    if (!instr.op.name[0]) {
+        warn_at("Unknown opcode %2X (extension %d)\n", instr.op.opcode, instr.op.subcode);
+        strcpy(instr.op.name, "?"); /* less arrogant than objdump's (bad) */
+    }
 
     /* modify the instruction name if appropriate */
     if ((instr.op.flags & OP_STACK) && (instr.prefix & PREFIX_OP32)) {
@@ -260,6 +622,10 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
             outp += sprintf(outp, "%s ", seg16[(instr.prefix & PREFIX_SEG_MASK)-1]);
         }
     }
+    if ((instr.prefix & PREFIX_OP32) && instr.op.size != 16 && instr.op.size != 32) {
+        warn_at("Operand-size override used with opcode %2X %s\n", instr.op.opcode, instr.op.name);
+        outp += sprintf(outp, (asm_syntax == GAS) ? "data32 " : "o32 "); /* fixme: how should MASM print it? */
+    }
     if ((instr.prefix & PREFIX_ADDR32) && (asm_syntax == NASM) && (instr.op.flags & OP_STRING)) {
         outp += sprintf(outp, "a32 ");
     } else if ((instr.prefix & PREFIX_ADDR32) && !usedmem && instr.op.opcode != 0xE3) { /* jecxz */
@@ -337,7 +703,7 @@ static void print_disassembly(const segment *seg) {
 
         /* find a valid instruction */
         if (!(seg->instr_flags[ip] & INSTR_VALID)) {
-            if (mode & DISASSEMBLE_ALL) {
+            if (opts & DISASSEMBLE_ALL) {
                 /* still skip zeroes */
                 if (read_byte() == 0) {
                     printf("     ...\n");
