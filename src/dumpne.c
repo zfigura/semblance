@@ -196,8 +196,8 @@ static int demangle_protection(char *buffer, char *start, char *prot, char *func
             strcat(buffer, "static ");
         if ((*start-'A') & 4)
             strcat(buffer, "virtual ");
-        if ((*start-'A') & 1)
-            strcat(buffer, "far ");
+        if (!((*start-'A') & 1))
+            strcat(buffer, "near ");
         if (((*start-'A') & 24) == 0)
             strcat(buffer, "private ");
         else if (((*start-'A') & 24) == 8)
@@ -206,9 +206,10 @@ static int demangle_protection(char *buffer, char *start, char *prot, char *func
             strcat(buffer, "public ");
         *prot = *start;
     } else if (*start == 'Y') {
-        /* near function - probably needn't be marked? */
+        strcat(buffer, "near ");
     } else if (*start == 'Z') {
-        strcat(buffer, "far ");
+        /* normally we'd mark far and not near, but most functions which
+         * are going to have an exported name will be far. */
     } else if (*start == 'X') {
         /* It's not clear what this means, but it always seems to be
          * followed by either a number, or a string of text and then @. */
@@ -266,20 +267,6 @@ static int demangle_type(char *buffer, char *type) {
 
     switch (*type) {
     case 'A':
-    {
-        int ret;
-        if ((type[1]-'A') & 1)
-            strcat(buffer, "const ");
-        if ((type[1]-'A') & 2)
-            strcat(buffer, "volatile ");
-        ret = demangle_type(buffer, type+2);
-        if ((type[1]-'A') & 4)
-            strcat(buffer, "far ");
-        strcat(buffer, "&");
-        return ret+2;
-    }
-    case 'M': strcat(buffer, "float "); return 1;
-    case 'N': strcat(buffer, "double "); return 1;
     case 'P':
     {
         int ret;
@@ -288,11 +275,13 @@ static int demangle_type(char *buffer, char *type) {
         if ((type[1]-'A') & 2)
             strcat(buffer, "volatile ");
         ret = demangle_type(buffer, type+2);
-        if ((type[1]-'A') & 4)
-            strcat(buffer, "far ");
-        strcat(buffer, "*");
+        if (!((type[1]-'A') & 4))
+            strcat(buffer, "near ");
+        strcat(buffer, (*type == 'A') ? "&" : "*");
         return ret+2;
     }
+    case 'M': strcat(buffer, "float "); return 1;
+    case 'N': strcat(buffer, "double "); return 1;
     case 'U':
     case 'V':
     {
@@ -340,7 +329,7 @@ static char *demangle(char *func) {
 
     /* This should mark the calling convention. Always seems to be A,
      * but this corroborates the function body which uses CDECL. */
-    if (*p == 'A') strcat(buffer, "__cdecl ");
+    if (*p == 'A'); /* strcat(buffer, "__cdecl "); */
     else if (*p == 'C') strcat(buffer, "__pascal ");
     else warn("Unknown calling convention %c for function %s\n", *p, func);
 
