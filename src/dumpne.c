@@ -190,12 +190,147 @@ void print_specfile(char *module_name, entry *entry_table, int count) {
     fclose(specfile);
 }
 
+static int demangle_protection(char *buffer, char *start, char *prot, char *func) {
+    if (*start >= 'A' && *start <= 'V') {
+        if ((*start-'A') & 2)
+            strcat(buffer, "static ");
+        if ((*start-'A') & 4)
+            strcat(buffer, "virtual ");
+        if ((*start-'A') & 1)
+            strcat(buffer, "far ");
+        if (((*start-'A') & 24) == 0)
+            strcat(buffer, "private ");
+        else if (((*start-'A') & 24) == 8)
+            strcat(buffer, "protected ");
+        else if (((*start-'A') & 24) == 16)
+            strcat(buffer, "public ");
+        *prot = *start;
+    } else if (*start == 'Y') {
+        /* near function - probably needn't be marked? */
+    } else if (*start == 'Z') {
+        strcat(buffer, "far ");
+    } else if (*start == 'X') {
+        /* It's not clear what this means, but it always seems to be
+         * followed by either a number, or a string of text and then @. */
+        *prot = 'V'; /* just pretend that for now */
+        if (start[1] >= '0' && start[1] <= '9') {
+            strcat(buffer, "(X0) ");
+            buffer[strlen(buffer)-3] = start[1];
+            return 2;
+        } else {
+            return (strchr(start, '@')+1)-start;
+        }
+    } else if (*start == '_' && start[1] != '$') {
+        /* Same as above, but there is an extra character first (which
+         * is often V, so is likely to be the protection/etc), and then
+         * a number (often 7 or 3). */
+        demangle_protection(buffer, start+1, prot, func);
+        if (start[3] >= '0' && start[3] <= '9') {
+            strcat(buffer, "(_00) ");
+            buffer[strlen(buffer)-4] = start[2];
+            buffer[strlen(buffer)-3] = start[3];
+            return 4;
+        } else {
+            return (strchr(start, '@')+1)-start;
+        }        
+    } else {
+        warn("Unknown modifier %c for function %s\n", *start, func);
+        return 0;
+    }
+    return 1;
+}
+
+static const char *int_types[] = {
+    "signed char",      /* C */
+    "char",             /* D */
+    "unsigned char",    /* E */
+    "short",            /* F */
+    "unsigned short",   /* G */
+    "int",              /* H */
+    "unsigned int",     /* I */
+    "long",             /* J */
+    "unsigned long",    /* K */
+};
+
+/* Returns the number of characters processed. */
+static int demangle_type(char *buffer, char *type) {
+    if (*type >= 'C' && *type <= 'K') {
+        strcat(buffer, int_types[*type-'C']);
+        strcat(buffer, " ");
+        return 1;
+    }
+
+    switch (*type) {
+    case 'M': strcat(buffer, "float "); return 1;
+    case 'N': strcat(buffer, "double "); return 1;
+    case 'P':
+    {
+        int ret;
+        if ((type[1]-'A') & 1)
+            strcat(buffer, "const ");
+        if ((type[1]-'A') & 2)
+            strcat(buffer, "volatile ");
+        ret = demangle_type(buffer, type+2);
+        if ((type[1]-'A') & 4)
+            strcat(buffer, "far ");
+        strcat(buffer, "*");
+        return ret+2;
+    }
+    case 'U':
+    {
+        /* Fog says this is a struct, but it seems to represent a typedef
+         * instead. */
+        char *end = strstr(type, "@@");
+        strncat(buffer, type+1, end-(type+1));
+        return end-type;
+    }
+    case 'X': strcat(buffer, "void "); return 1;
+    default: return 0;
+    }
+}
+
+/* Demangle a C++ function name. The scheme used seems to be mostly older
+ * than any documented, but I was able to find documentation that is at
+ * least close in Agner Fog's manual. */
 static char *demangle(char *func) {
-    char buffer[256];
+    char buffer[1024];
     char classname[256];
     char *start, *end;
+    char prot = 0;
+    int len;
 
-    /* First get the classname. This is in reverse order, so
+    /* Figure out the modifiers and calling convention. */
+    buffer[0] = 0;
+    start = strstr(func, "@@") + 2;
+    len = demangle_protection(buffer, start, &prot, func);
+    if (!len) {
+        return func;
+    }
+    start += len;
+
+    /* The next one seems to always be E or F. No idea why. */
+    if (prot >= 'A' && prot <= 'V' && !((prot-'A') & 2)) {
+        if (*start != 'E' && *start != 'F')
+            warn("Unknown modifier %c for function %s\n", *start, func);
+        start++;
+    }
+
+    /* This should mark the calling convention. Always seems to be A,
+     * but this corroborates the function body which uses CDECL. */
+    if (*start == 'A') strcat(buffer, "__cdecl ");
+    else if (*start == 'C') strcat(buffer, "__pascal ");
+    else warn("Unknown calling convention %c for function %s\n", *start, func);
+
+    /* This marks the return value. */
+    start++;
+    len = demangle_type(buffer, start);
+    if (!len) {
+        warn("Unknown return type %c for function %s\n", *start, func);
+        len = 1;
+    }
+    start += len;
+
+    /* Get the classname. This is in reverse order, so
      * find the first @@ and work backwards from there. */
     classname[0] = 0;
     start = end = strstr(func, "@@");
@@ -208,9 +343,7 @@ static char *demangle(char *func) {
         end = start;
     }
 
-    warn("%s\n", classname);
-
-    strcpy(buffer, classname);
+    strcat(buffer, classname);
 
     func = realloc(func, (strlen(buffer)+1)*sizeof(char));
     strcpy(func, buffer);
