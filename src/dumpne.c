@@ -221,6 +221,7 @@ static int demangle_protection(char *buffer, char *start, char *prot, char *func
             return (strchr(start, '@')+1)-start;
         }
     } else if (*start == '_' && start[1] != '$') {
+#if 1
         /* Same as above, but there is an extra character first (which
          * is often V, so is likely to be the protection/etc), and then
          * a number (often 7 or 3). */
@@ -232,7 +233,10 @@ static int demangle_protection(char *buffer, char *start, char *prot, char *func
             return 4;
         } else {
             return (strchr(start, '@')+1)-start;
-        }        
+        }
+#else
+        return 0;
+#endif
     } else {
         warn("Unknown modifier %c for function %s\n", *start, func);
         return 0;
@@ -261,6 +265,19 @@ static int demangle_type(char *buffer, char *type) {
     }
 
     switch (*type) {
+    case 'A':
+    {
+        int ret;
+        if ((type[1]-'A') & 1)
+            strcat(buffer, "const ");
+        if ((type[1]-'A') & 2)
+            strcat(buffer, "volatile ");
+        ret = demangle_type(buffer, type+2);
+        if ((type[1]-'A') & 4)
+            strcat(buffer, "far ");
+        strcat(buffer, "&");
+        return ret+2;
+    }
     case 'M': strcat(buffer, "float "); return 1;
     case 'N': strcat(buffer, "double "); return 1;
     case 'P':
@@ -277,11 +294,18 @@ static int demangle_type(char *buffer, char *type) {
         return ret+2;
     }
     case 'U':
+    case 'V':
     {
-        /* Fog says this is a struct, but it seems to represent a typedef
-         * instead. */
+        /* These represent structs (U) or types (V), but the name given
+         * doesn't seem to need a qualifier. */
         char *end = strstr(type, "@@");
+        if (!end) {
+            /* something can go between the at signs, but what does it mean? */
+            end = strchr(type, '@')+1;
+            end = strchr(type, '@');
+        }
         strncat(buffer, type+1, end-(type+1));
+        strcat(buffer, " ");
         return end-type;
     }
     case 'X': strcat(buffer, "void "); return 1;
@@ -294,56 +318,72 @@ static int demangle_type(char *buffer, char *type) {
  * least close in Agner Fog's manual. */
 static char *demangle(char *func) {
     char buffer[1024];
-    char classname[256];
-    char *start, *end;
+    char *p, *start, *end;
     char prot = 0;
     int len;
 
     /* Figure out the modifiers and calling convention. */
     buffer[0] = 0;
-    start = strstr(func, "@@") + 2;
-    len = demangle_protection(buffer, start, &prot, func);
+    p = strstr(func, "@@") + 2;
+    len = demangle_protection(buffer, p, &prot, func);
     if (!len) {
         return func;
     }
-    start += len;
+    p += len;
 
     /* The next one seems to always be E or F. No idea why. */
     if (prot >= 'A' && prot <= 'V' && !((prot-'A') & 2)) {
-        if (*start != 'E' && *start != 'F')
-            warn("Unknown modifier %c for function %s\n", *start, func);
-        start++;
+        if (*p != 'E' && *p != 'F')
+            warn("Unknown modifier %c for function %s\n", *p, func);
+        p++;
     }
 
     /* This should mark the calling convention. Always seems to be A,
      * but this corroborates the function body which uses CDECL. */
-    if (*start == 'A') strcat(buffer, "__cdecl ");
-    else if (*start == 'C') strcat(buffer, "__pascal ");
-    else warn("Unknown calling convention %c for function %s\n", *start, func);
+    if (*p == 'A') strcat(buffer, "__cdecl ");
+    else if (*p == 'C') strcat(buffer, "__pascal ");
+    else warn("Unknown calling convention %c for function %s\n", *p, func);
 
     /* This marks the return value. */
-    start++;
-    len = demangle_type(buffer, start);
+    p++;
+    len = demangle_type(buffer, p);
     if (!len) {
-        warn("Unknown return type %c for function %s\n", *start, func);
+        warn("Unknown return type %c for function %s\n", *p, func);
         len = 1;
     }
-    start += len;
+    p += len;
 
     /* Get the classname. This is in reverse order, so
      * find the first @@ and work backwards from there. */
-    classname[0] = 0;
     start = end = strstr(func, "@@");
     while (1) {
         start--;
         while (*start != '?' && *start != '@') start--;
-        strncat(classname, start+1, end-(start+1));
+        strncat(buffer, start+1, end-(start+1));
         if (*start == '?') break;
-        strcat(classname, "::");
+        strcat(buffer, "::");
         end = start;
     }
 
-    strcat(buffer, classname);
+    /* Print the arguments. */
+    if (*p == 'X') {
+        strcat(buffer, "(void)");
+    } else {
+        strcat(buffer, "(");
+        while (*p != '@') {
+            len = demangle_type(buffer, p);
+            if (!len) {
+                warn("Unknown argument type %c for function %s\n", *p, func);
+                len = 1;
+            }
+            if (buffer[strlen(buffer)-1] == ' ')
+                buffer[strlen(buffer)-1] = 0;
+            p += len;
+            strcat(buffer, ", ");
+        }
+        buffer[strlen(buffer)-2] = ')';
+        buffer[strlen(buffer)-1] = 0;
+    }
 
     func = realloc(func, (strlen(buffer)+1)*sizeof(char));
     strcpy(func, buffer);
