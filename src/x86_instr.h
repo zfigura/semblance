@@ -86,6 +86,7 @@ typedef struct {
 #define PREFIX_LOCK     0x0020  /* F0 */
 #define PREFIX_REPNE    0x0040  /* F2 */
 #define PREFIX_REPE     0x0080  /* F3 */
+#define PREFIX_WAIT     0x0100  /* 9B */
 
 enum disptype {
     DISP_NONE = 0,      /* no disp, i.e. mod == 0 && m != 6 */

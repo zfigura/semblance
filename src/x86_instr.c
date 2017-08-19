@@ -2,8 +2,6 @@
 
 #include "x86_instr.h"
 
-/* on helppc but missing here: aam, aad, esc */
-
 static const op_info instructions[256] = {
     {0x00, 8,  8, "add",        RM,     REG,    OP_LOCK},
     {0x01, 8, 16, "add",        RM,     REG,    OP_LOCK},
@@ -160,7 +158,7 @@ static const op_info instructions[256] = {
     {0x98, 8, 16, "cbw"},       /* handled separately */
     {0x99, 8, 16, "cwd"},       /* handled separately */
     {0x9A, 8,  0, "call",       PTR32,  0,      OP_FAR},
-    {0x9B, 8,  0, "wait"},
+    {0x9B, 8,  0, "wait"},  /* wait ~prefix~ */
     {0x9C, 8, 16, "pushf",      0,      0,      OP_STACK},
     {0x9D, 8, 16, "popf",       0,      0,      OP_STACK},
     {0x9E, 8,  0, "sahf"},
@@ -493,10 +491,6 @@ static const op_info instructions_0F[] = {
     {0xCF, 0, 16, "bswap",      DI},
 };
 
-/* According to renejeschke, the processer treats an fstenv (etc.)
- * as two separate instructions (viz. wait fnstenv). Accordingly
- * I am inclined to keep them separate. */
-
 /* mod < 3 (instructions with memory args) */
 static const op_info instructions_fpu_m[64] = {
     {0xD8, 0, 32, "fadd",       MEM,    0,      OP_S},
@@ -682,6 +676,7 @@ word get_prefix(byte opcode) {
     case 0x65: return PREFIX_GS;
     case 0x66: return PREFIX_OP32;
     case 0x67: return PREFIX_ADDR32;
+    case 0x9B: return PREFIX_WAIT;
     case 0xF0: return PREFIX_LOCK;
     case 0xF2: return PREFIX_REPNE;
     case 0xF3: return PREFIX_REPE;
