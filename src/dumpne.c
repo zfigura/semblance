@@ -495,16 +495,15 @@ static void load_exports(import_module *module) {
         module->exports[count].ordinal = ordinal;
 
         p = strchr(line, '\t');
-        if (!p) {
+        if (p) {
+            p++;
+            module->exports[count].name = strdup(p);
+    
+            if ((opts & DEMANGLE) && module->exports[count].name[0] == '?')
+                module->exports[count].name = demangle(module->exports[count].name);
+        } else {
             module->exports[count].name = NULL;
-            continue;
         }
-        p++;
-        module->exports[count].name = strdup(p);
-
-        if ((opts & DEMANGLE) && module->exports[count].name[0] == '?')
-            module->exports[count].name = demangle(module->exports[count].name);
-
         count++;
     }
 
@@ -530,6 +529,10 @@ static void get_import_module_table(long start, import_module **table, word coun
 
         if (mode & DISASSEMBLE)
             load_exports(&ret[i]);
+        else {
+            ret[i].exports = NULL;
+            ret[i].export_count = 0;
+        }
     }
 
     *table = ret;

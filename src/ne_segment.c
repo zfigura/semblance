@@ -466,9 +466,10 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
         print_arg(cs, ip, arg2, instr.arg2, CL, &instr, &usedmem);
 
     /* if we have relocations, discard one of the above and replace it */
-    for (i=ip; i<ip+len; i++) {
+    for (i = ip; i < ip+len; i++) { /* fixme: don't read past length */
         if (flags[i] & INSTR_RELOC) {
             const reloc *r = get_reloc(cs, i, reloc_data, reloc_count);
+            if (!r) break;
             char *module;
             if (r->type == 1 || r->type == 2)
                 module = import_module_table[r->target_segment-1].name;
@@ -777,17 +778,19 @@ static void scan_segment(word cs, word ip) {
 
         /* mark the bytes */
         seg->instr_flags[ip] |= INSTR_VALID;
-        for (i = 0; i < instr_length; i++) seg->instr_flags[ip+i] |= INSTR_SCANNED;
+        for (i = ip; i < ip+instr_length && i < seg->min_alloc; i++) seg->instr_flags[i] |= INSTR_SCANNED;
 
-        /* note: it *is* valid for the last instruction to "hang over" the end
-         * of the segment, so don't break here. */
+        if (i < ip+instr_length && i == seg->min_alloc) break;
 
         /* handle conditional and unconditional jumps */
         if (instr.op.arg0 == PTR32) {
             for (i = ip; i < ip+instr_length; i++) {
                 if (seg->instr_flags[i] & INSTR_RELOC) {
                     const reloc *r = get_reloc(cs, i, seg->reloc_table, seg->reloc_count);
-                    const segment *tseg = &segments[r->target_segment-1];
+                    segment *tseg;
+
+                    if (!r) break;
+                    tseg = &segments[r->target_segment-1];
 
                     if (r->type != 0) break;
 
@@ -881,7 +884,7 @@ static void print_segment_flags(word flags) {
     printf("    Flags: 0x%04x (%s)\n", flags, buffer);
 }
 
-static void read_reloc(reloc *r, const long start, const word length) {
+static void read_reloc(segment *seg, reloc *r) {
     byte size = read_byte();
     byte type = read_byte();
     word offset = read_word();
@@ -932,14 +935,21 @@ static void read_reloc(reloc *r, const long start, const word length) {
     do {
         /* One of my testcases has relocation offsets that exceed the length of
          * the segment. Until we figure out what that's about, ignore them. */
-        if (offset_cursor >= length) {
-            warn("Offset %04x exceeds segment length (%04x).\n", offset_cursor, length);
+        if (offset_cursor >= seg->length) {
+            warn("%d:%04x: Relocation offset exceeds segment length (%04x).\n", seg->cs, offset_cursor, seg->length);
             break;
         }
 
-        r->offset_count++;
+        if (seg->instr_flags[offset_cursor] & INSTR_RELOC) {
+            warn("%d:%04x: Infinite loop reading relocation data.\n", seg->cs, offset_cursor);
+            r->offset_count = 0;
+            return;
+        }
 
-        fseek(f, start+offset_cursor, SEEK_SET);
+        r->offset_count++;
+        seg->instr_flags[offset_cursor] |= INSTR_RELOC;
+
+        fseek(f, seg->start+offset_cursor, SEEK_SET);
         next = read_word();
         if (type & 4)
             offset_cursor += next;
@@ -952,14 +962,14 @@ static void read_reloc(reloc *r, const long start, const word length) {
     offset_cursor = offset;
     r->offset_count = 0;
     do {
-        if (offset_cursor >= length) {
+        if (offset_cursor >= seg->length) {
             break;
         }
 
         r->offsets[r->offset_count] = offset_cursor;
         r->offset_count++;
 
-        fseek(f, start+offset_cursor, SEEK_SET);
+        fseek(f, seg->start+offset_cursor, SEEK_SET);
         next = read_word();
         if (type & 4)
             offset_cursor += next;
@@ -995,17 +1005,19 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
 
     /* First pass: just read the relocation data */
     for (seg = 0; seg < count; seg++) {
-        fseek(f, segments[seg].start + segments[seg].length, SEEK_SET);
-        segments[seg].reloc_count = read_word();
-        segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(reloc));
+        if (segments[seg].flags & 0x0100) {
+            fseek(f, segments[seg].start + segments[seg].length, SEEK_SET);
+            segments[seg].reloc_count = read_word();
+            segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(reloc));
 
-        for (i = 0; i < segments[seg].reloc_count; i++) {
-            int o;
-            fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);
-            read_reloc(&segments[seg].reloc_table[i], segments[seg].start, segments[seg].length);
-            for (o = 0; o < segments[seg].reloc_table[i].offset_count; o++) {
-                segments[seg].instr_flags[segments[seg].reloc_table[i].offsets[o]] |= INSTR_RELOC;
+            for (i = 0; i < segments[seg].reloc_count; i++) {
+                int o;
+                fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);
+                read_reloc(&segments[seg], &segments[seg].reloc_table[i]);
             }
+        } else {
+            segments[seg].reloc_count = 0;
+            segments[seg].reloc_table = NULL;
         }
     }
 
@@ -1014,7 +1026,11 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
     for (i = 0; i < entry_count; i++) {
 
         /* don't scan exported values */
-        if (entry_table[i].segment == 0xfe) continue;
+        if (entry_table[i].segment == 0 ||
+            entry_table[i].segment == 0xfe) continue;
+
+        /* or values that live in data segments */
+        if (segments[entry_table[i].segment-1].flags & 0x0001) continue;
 
         /* Annoyingly, data can be put in code segments, and without any
          * apparent indication that it is not code. As a dumb heuristic,
@@ -1027,7 +1043,9 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
     }
 
     /* and don't forget to scan the program entry point */
-    if (entry_ip >= segments[entry_cs-1].length) {
+    if (entry_cs == 0 && entry_ip == 0) {
+        /* do nothing */
+    } else if (entry_ip >= segments[entry_cs-1].length) {
         /* see note above under relocations */
         warn("Entry point %d:%04x exceeds segment length (%04x)\n", entry_cs, entry_ip, segments[seg].length);
     } else {
