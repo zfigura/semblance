@@ -595,7 +595,8 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
             else if (instr.op.size == 32)
                 strcat(instr.op.name, "l");
         }
-    }
+    } else if (asm_syntax != GAS && (instr.op.opcode == 0xCA || instr.op.opcode == 0xCB))
+        strcat(instr.op.name, "f");
 
     /* okay, now we begin dumping */
     outp += sprintf(outp, "%4d.%04x:\t", cs, ip);
