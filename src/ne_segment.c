@@ -638,11 +638,6 @@ int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const r
             warn_at("lock prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
         outp += sprintf(outp, "lock ");
     }
-    if (instr.prefix & PREFIX_WAIT) {
-        if (instr.op.opcode < 0xd0 || instr.op.opcode > 0xdf)
-            warn_at("wait prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, "wait ");
-    }
     if (instr.prefix & PREFIX_REPNE) {
         if(!(instr.op.flags & OP_REPNE))
             warn_at("repne prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
