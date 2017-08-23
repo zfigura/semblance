@@ -97,12 +97,13 @@ const char *const rsrc_types[] = {
     "Font component",    /* 8 */
     "Accelerator table", /* 9 */
     "Resource data",     /* a */
-    0,
+    "Message table",     /* b */    /* fixme: error table? */
     "Cursor directory",  /* c */
     0,
     "Icon directory",    /* e */
-    0,
+    "Name table",        /* f */
     "Version",           /* 10 */
+    0,                              /* fixme: RT_DLGINCLUDE? */
     0
 };
 const size_t rsrc_types_count = sizeof(rsrc_types)/sizeof(rsrc_types[0]);
@@ -865,8 +866,47 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
 #if 0 /* No testcases for this either */
     case 0x8007: /* Font directory */
     case 0x8008: /* Font component */
-    case 0x8009: /* Accelerator table */
         break;
+    case 0x8009: /* Accelerator table */
+    {
+        /* This format seems to be similar but older. Five bytes per
+         * entry, in the format:
+         * [byte] - flags
+         * [word] - key
+         * [word] - id
+         *
+         * Problem is, the key codes don't seem to make much sense. In
+         * particular we have instances where the virtual flag isn't set
+         * but we have C0 control codes. So the mapping must be different
+         * than it is for current accelerator tables.
+         */
+        byte flags;
+
+        do {
+            flags = read_byte();
+            key = read_word();
+            id = read_word();
+
+            printf("    ");
+
+            if (flags & 0x02)
+                printf("(FNOINVERT) ");
+
+            if (flags & 0x04)
+                printf("Shift+");
+            if (flags & 0x08)
+                printf("Ctrl+");
+            if (flags & 0x10)
+                printf("Alt+");
+            if (flags & 0x60)
+                warn("Unknown accelerator flags 0x%02x\n", flags & 0x60);
+
+            /* fixme: print the key itself */
+
+            printf(": %d\n", id);
+        } while (!(flags & 0x80));
+    }
+    break;
 #endif
     /* Resource data (0x800a) is parsed as default, i.e. hex-dumped. */
     case 0x800c: /* Cursor directory */
