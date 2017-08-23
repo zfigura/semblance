@@ -475,6 +475,57 @@ static const char *const rsrc_dialog_class[] = {
     0
 };
 
+static void print_rsrc_menu_items(int depth) {
+    word flags, id;
+    char buffer[1024];
+    int i;
+
+    while (1) {
+        flags = read_word();
+
+        printf("        ");
+        for (i = 0; i < depth; i++) printf("  ");
+        if (!(flags & 0x0010)) {
+            /* item ID */
+            id = read_word();
+            printf("%d: ", id);
+        }
+
+        print_escaped_string0();
+
+        /* and print flags */
+        buffer[0] = '\0';
+        if (flags & 0x0001)
+            strcat(buffer, ", grayed");
+        if (flags & 0x0002)
+            strcat(buffer, ", inactive");
+        if (flags & 0x0004)
+            strcat(buffer, ", bitmap");
+        if (flags & 0x0008)
+            strcat(buffer, ", checked");
+        if (flags & 0x0010)
+            strcat(buffer, ", popup");
+        if (flags & 0x0020)
+            strcat(buffer, ", menu bar break");
+        if (flags & 0x0040)
+            strcat(buffer, ", menu break");
+        /* don't print ENDMENU */
+        if (flags & 0xff00)
+            sprintf(buffer+strlen(buffer), ", unknown flags 0x%04x", flags & 0xff00);
+    
+        if (buffer[0])
+            printf(" (%s)", buffer+2);
+        putchar('\n');
+
+        /* if we have a popup, recurse */
+        if (flags & 0x0010)
+            print_rsrc_menu_items(depth+1);
+
+        if (flags & 0x0080)
+            break;
+    }
+}
+
 /* This is actually two headers, with the first (VS_VERSIONINFO)
  * describing the second. However it seems the second is always
  * a VS_FIXEDFILEINFO header, so we ignore most of those details. */
@@ -713,30 +764,27 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
         putchar('\n');
     }
     break;
-#if 0 /* until we find a testcase, hexdump */
     case 0x8004: /* Menu */
     {
-        /* The following code has not been tested, since I couldn't find
-         * any executables with menu resources. */
         word extended = read_word();
         word offset = read_word();
         long cursor;
-        if (extended > 1){
+        word flags;
+
+        if (extended > 1) {
             warn("Unknown menu version %d\n",extended);
             break;
         }
-        printf(extended ? "    Type: extended" : "    Type: standard");
+        printf(extended ? "    Type: extended\n" : "    Type: standard\n");
         if (offset != extended*4)
             warn("Unexpected offset value %d (expected %d)\n", offset, extended*4);
-        if (extended){
+        if (extended)
             printf("    Help ID: %d\n", read_dword());
-            /* todo */
-        } else {
-            /* todo */
-        }
+
+        printf("    Items:\n");
+        print_rsrc_menu_items(0);
     }
     break;
-#endif
     case 0x8005: /* Dialog box */
     {
         byte count;
