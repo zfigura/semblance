@@ -123,7 +123,6 @@ static const char modrm16_masm[8][6] = {
     "bx+si", "bx+di", "bp+si", "bp+di", "si", "di", "bp", "bx"
 };
 
-
 /* With MASM/NASM, use capital letters to help disambiguate them from the following 'h'. */
 
 /* Parameters:
@@ -445,7 +444,7 @@ static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, 
 
     out[0] = 0;
 
-    len = get_instr(cs, ip, p, &instr, is32);
+    len = get_instr(ip, p, &instr, is32);
 
     /* did we find too many prefixes? */
     if (get_prefix(instr.op.opcode)) {
@@ -535,68 +534,8 @@ static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, 
         comment = get_entry_name(cs, instr.arg0);
 
     /* check that we have a valid instruction */
-    if (!instr.op.name[0]) {
+    if (instr.op.name[0] == '?')
         warn_at("Unknown opcode %2X (extension %d)\n", instr.op.opcode, instr.op.subcode);
-        strcpy(instr.op.name, "?"); /* less arrogant than objdump's (bad) */
-    }
-
-    /* modify the instruction name if appropriate */
-    if ((instr.op.flags & OP_STACK) && (instr.prefix & PREFIX_OP32)) {
-        if (instr.op.size == 16)
-            strcat(instr.op.name, "w");
-        else
-            strcat(instr.op.name, (asm_syntax == GAS) ? "l" : "d");
-    } else if ((instr.op.flags & OP_STRING) && asm_syntax != GAS) {
-        if (instr.op.size == 8)
-            strcat(instr.op.name, "b");
-        else if (instr.op.size == 16)
-            strcat(instr.op.name, "w");
-        else if (instr.op.size == 32)
-            strcat(instr.op.name, "d");
-    } else if (instr.op.opcode == 0x98 && (instr.prefix & PREFIX_OP32))
-        strcpy(instr.op.name, "cwde");
-    else if (instr.op.opcode == 0x99 && (instr.prefix & PREFIX_OP32))
-        strcpy(instr.op.name, "cdq");
-    else if (instr.op.opcode == 0xE3 && (instr.prefix & PREFIX_ADDR32))
-        strcpy(instr.op.name, "jecxz");
-    else if (instr.op.opcode == 0xD4 && instr.arg0 == 10) {
-        strcpy(instr.op.name, "aam");
-        arg0[0] = 0;
-    } else if (instr.op.opcode == 0xD5 && instr.arg0 == 10) {
-        strcpy(instr.op.name, "aad");
-        arg0[0] = 0;
-    } else if (asm_syntax == GAS) {
-        if (instr.op.flags & OP_FAR) {
-            memmove(instr.op.name+1, instr.op.name, strlen(instr.op.name));
-            instr.op.name[0] = 'l';
-        } else if (instr.op.opcode == 0x0FB6)   /* movzx */
-            strcpy(instr.op.name, (instr.op.size == 32) ? "movzbl" : "movzbw");
-        else if (instr.op.opcode == 0x0FB7)     /* movzx */
-            strcpy(instr.op.name, (instr.op.size == 32) ? "movzwl" : "movzww");
-        else if (instr.op.opcode == 0x0FBE)     /* movsx */
-            strcpy(instr.op.name, (instr.op.size == 32) ? "movsbl" : "movsbw");
-        else if (instr.op.opcode == 0x0FBF)     /* movsx */
-            strcpy(instr.op.name, (instr.op.size == 32) ? "movswl" : "movsww");
-        else if (instr.op.arg0 != REG &&
-                 instr.op.arg1 != REG &&
-                 instr.modrm_disp != DISP_REG) {
-            if ((instr.op.flags & OP_LL) == OP_LL)
-                strcat(instr.op.name, "ll");
-            else if (instr.op.flags & OP_S)
-                strcat(instr.op.name, "s");
-            else if (instr.op.flags & OP_L)
-                strcat(instr.op.name, "l");
-            else if (instr.op.size == 80)
-                strcat(instr.op.name, "t");
-            else if (instr.op.size == 8)
-                strcat(instr.op.name, "b");
-            else if (instr.op.size == 16)
-                strcat(instr.op.name, "w");
-            else if (instr.op.size == 32)
-                strcat(instr.op.name, "l");
-        }
-    } else if (asm_syntax != GAS && (instr.op.opcode == 0xCA || instr.op.opcode == 0xCB))
-        strcat(instr.op.name, "f");
 
     /* okay, now we begin dumping */
     outp += sprintf(outp, "%4d.%04x:\t", cs, ip);
@@ -770,7 +709,7 @@ static void scan_segment(word cs, word ip) {
             fread(buffer, 1, seg->length-ip, f);
         else
             fread(buffer, 1, sizeof(buffer), f);
-        instr_length = get_instr(cs, ip, buffer, &instr, seg->flags & 0x2000);
+        instr_length = get_instr(ip, buffer, &instr, seg->flags & 0x2000);
 
         /* mark the bytes */
         seg->instr_flags[ip] |= INSTR_VALID;

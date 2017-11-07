@@ -1,5 +1,6 @@
 /* Functions to parse x86 instructions */
 
+#include <string.h>
 #include "x86_instr.h"
 
 static const op_info instructions[256] = {
@@ -847,12 +848,19 @@ static const char seg16[6][3] = {
 };
 
 /* Paramters:
- * p - pointer to the current instruction to be parsed
+ * ip    - current IP (used to calculate relative addresses)
+ * p     - pointer to the current instruction to be parsed
  * instr - [output] pointer to an instr_info struct to be filled
+ * is32  - bitness
  *
  * Returns: number of bytes processed
+ *
+ * Note: we don't print warnings here (all warnings should be printed
+ * while actually dumping output, both to keep this file agnostic and to
+ * ensure they only get printed once), so you will need to watch out for
+ * multiple prefixes, invalid instructions, etc.
  */
-int get_instr(word cs, word ip, const byte *p, instr_info *instr, int is32) {
+int get_instr(word ip, const byte *p, instr_info *instr, int is32) {
     int len = 0;
     byte opcode;
     word prefix;
@@ -911,6 +919,7 @@ int get_instr(word cs, word ip, const byte *p, instr_info *instr, int is32) {
          * we ran into something unused (or inadequately documented) */
         if (!instr->op.name[0]) {
             /* supply some default values so we can keep parsing */
+            strcpy(instr->op.name, "?"); /* less arrogant than objdump's (bad) */
             instr->op.opcode = opcode;
             instr->op.subcode = subcode;
             instr->op.size = 0;
@@ -953,6 +962,64 @@ int get_instr(word cs, word ip, const byte *p, instr_info *instr, int is32) {
         else if (instr->op.flags & OP_ARG2_CL)
             len += get_arg(ip+len, &p[len], &instr->arg2, CL, instr, is32);
     }
+
+    /* modify the instruction name if appropriate */
+    if ((instr->op.flags & OP_STACK) && (instr->prefix & PREFIX_OP32)) {
+        if (instr->op.size == 16)
+            strcat(instr->op.name, "w");
+        else
+            strcat(instr->op.name, (asm_syntax == GAS) ? "l" : "d");
+    } else if ((instr->op.flags & OP_STRING) && asm_syntax != GAS) {
+        if (instr->op.size == 8)
+            strcat(instr->op.name, "b");
+        else if (instr->op.size == 16)
+            strcat(instr->op.name, "w");
+        else if (instr->op.size == 32)
+            strcat(instr->op.name, "d");
+    } else if (instr->op.opcode == 0x98 && (instr->prefix & PREFIX_OP32))
+        strcpy(instr->op.name, "cwde");
+    else if (instr->op.opcode == 0x99 && (instr->prefix & PREFIX_OP32))
+        strcpy(instr->op.name, "cdq");
+    else if (instr->op.opcode == 0xE3 && (instr->prefix & PREFIX_ADDR32))
+        strcpy(instr->op.name, "jecxz");
+    else if (instr->op.opcode == 0xD4 && instr->arg0 == 10) {
+        strcpy(instr->op.name, "aam");
+        instr->op.arg0 = 0;
+    } else if (instr->op.opcode == 0xD5 && instr->arg0 == 10) {
+        strcpy(instr->op.name, "aad");
+        instr->op.arg0 = 0;
+    } else if (asm_syntax == GAS) {
+        if (instr->op.flags & OP_FAR) {
+            memmove(instr->op.name+1, instr->op.name, strlen(instr->op.name));
+            instr->op.name[0] = 'l';
+        } else if (instr->op.opcode == 0x0FB6)   /* movzx */
+            strcpy(instr->op.name, (instr->op.size == 32) ? "movzbl" : "movzbw");
+        else if (instr->op.opcode == 0x0FB7)     /* movzx */
+            strcpy(instr->op.name, (instr->op.size == 32) ? "movzwl" : "movzww");
+        else if (instr->op.opcode == 0x0FBE)     /* movsx */
+            strcpy(instr->op.name, (instr->op.size == 32) ? "movsbl" : "movsbw");
+        else if (instr->op.opcode == 0x0FBF)     /* movsx */
+            strcpy(instr->op.name, (instr->op.size == 32) ? "movswl" : "movsww");
+        else if (instr->op.arg0 != REG &&
+                 instr->op.arg1 != REG &&
+                 instr->modrm_disp != DISP_REG) {
+            if ((instr->op.flags & OP_LL) == OP_LL)
+                strcat(instr->op.name, "ll");
+            else if (instr->op.flags & OP_S)
+                strcat(instr->op.name, "s");
+            else if (instr->op.flags & OP_L)
+                strcat(instr->op.name, "l");
+            else if (instr->op.size == 80)
+                strcat(instr->op.name, "t");
+            else if (instr->op.size == 8)
+                strcat(instr->op.name, "b");
+            else if (instr->op.size == 16)
+                strcat(instr->op.name, "w");
+            else if (instr->op.size == 32)
+                strcat(instr->op.name, "l");
+        }
+    } else if (asm_syntax != GAS && (instr->op.opcode == 0xCA || instr->op.opcode == 0xCB))
+        strcat(instr->op.name, "f");
 
     return len;
 }
