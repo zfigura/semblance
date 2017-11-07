@@ -4,7 +4,8 @@ Semblance version 1.0
 Semblance is eventually meant as a set of tools to manipulate assembly
 code. Currently it only contains a single program:
 
-dumpne - produce disassembly and other information from NE files 
+dump - produce disassembly and other information from exectable files.
+       Currently only supports NE (New Executable) files.
 
 
 Installing
