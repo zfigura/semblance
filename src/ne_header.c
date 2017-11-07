@@ -129,7 +129,7 @@ static const char *const exetypes[] = {
     0
 };
 
-void print_header(struct header_ne *header){
+static void print_header(struct header_ne *header){
     /* Still need to deal with:
      *
      * 34 - number of resource segments (all of my testcases return 0)
@@ -158,7 +158,7 @@ void print_header(struct header_ne *header){
     printf("\n");
 }
 
-void print_export(entry *entry_table, int count) {
+static void print_export(entry *entry_table, int count) {
     int i;
 
     for (i = 0; i < count; i++)
@@ -170,7 +170,7 @@ void print_export(entry *entry_table, int count) {
                 entry_table[i].offset, entry_table[i].name ? entry_table[i].name : "<no name>");
 }
 
-void print_specfile(char *module_name, entry *entry_table, int count) {
+static void print_specfile(char *module_name, entry *entry_table, int count) {
     int i;
     FILE *specfile;
     char spec_name[13];

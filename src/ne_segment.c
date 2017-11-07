@@ -72,7 +72,7 @@ static const reloc *get_reloc(word cs, word ip, const reloc *reloc_data, word re
 }
 
 /* load an imported name from a specfile */
-char *get_imported_name(word module, word ordinal) {
+static char *get_imported_name(word module, word ordinal) {
     unsigned i;
     for (i=0; i<import_module_table[module-1].export_count; i++) {
         if (import_module_table[module-1].exports[i].ordinal == ordinal)
@@ -433,7 +433,7 @@ void print_arg(word cs, word ip, char *out, dword value, enum arg argtype, instr
 }
 
 /* Returns the number of bytes processed (same as get_instr). */
-int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const reloc *reloc_data, word reloc_count, int is32) {
+static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const reloc *reloc_data, word reloc_count, int is32) {
     instr_info instr = {0};
     char arg0[32] = {0}, arg1[32] = {0}, arg2[32] = {0};
     byte usedmem = 0;
@@ -974,7 +974,7 @@ static void read_reloc(segment *seg, reloc *r) {
     } while (next < 0xFFFb);
 }
 
-void free_reloc(reloc *reloc_data, word reloc_count) {
+static void free_reloc(reloc *reloc_data, word reloc_count) {
     int i;
     for (i = 0; i < reloc_count; i++) {
         free(reloc_data[i].offsets);

@@ -3,7 +3,7 @@
 
 #include "semblance.h"
 
-void dump_file(char *file){
+static void dump_file(char *file){
     word magic;
     long offset_ne = 0;
 
