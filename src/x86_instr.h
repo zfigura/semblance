@@ -112,4 +112,7 @@ extern int get_instr(word cs, word ip, const byte *p, instr_info *instr, int is3
 extern void print_arg(word cs, word ip, char *out, dword value, enum arg argtype, instr_info *instr, byte *usedmem);
 extern word get_prefix(byte opcode);
 
+/* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
+#define MAX_INSTR       16
+
 #endif /* __X86_INSTR_H */

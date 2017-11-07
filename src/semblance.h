@@ -35,6 +35,12 @@ static inline void skip_padding(char bytes){
     fseek(f, ((bytes-1) & (bytes-(ftell(f)%bytes)))*sizeof(byte), SEEK_CUR);
 }
 
+#ifdef USE_WARN
+#define warn(...)       fprintf(stderr, "Warning: " __VA_ARGS__)
+#else
+#define warn(...)
+#endif
+
 /* Common globals */
 
 #define DUMPHEADER      0x01

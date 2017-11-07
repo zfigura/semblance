@@ -3,12 +3,6 @@
 
 #include "semblance.h"
 
-#ifdef USE_WARN
-#define warn(...)       fprintf(stderr, "Warning: " __VA_ARGS__)
-#else
-#define warn(...)
-#endif
-
 typedef struct _entry {
     byte flags;
     byte segment;
@@ -32,9 +26,6 @@ byte *import_name_table;
 entry *entry_table;
 unsigned entry_count;
 import_module *import_module_table;
-
-/* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
-#define MAX_INSTR       16
 
 extern void print_rsrc(long start); /* in ne_resource.c */
 extern void print_segments(word count, word align, word entry_cs, word entry_ip); /* in ne_segment.c */
