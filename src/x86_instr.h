@@ -94,6 +94,8 @@ enum disptype {
     DISP_REG  = 3,      /* register, i.e. mod == 3 */
 };
 
+extern const char seg16[6][3];
+
 typedef struct {
     word prefix;
     op_info op;
@@ -108,7 +110,7 @@ typedef struct {
 } instr_info;
 
 extern int get_instr(word ip, const byte *p, instr_info *instr, int is32);
-extern void print_arg(word cs, word ip, char *out, dword value, enum arg argtype, instr_info *instr, byte *usedmem);
+extern void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr, byte *usedmem);
 extern word get_prefix(byte opcode);
 
 /* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
