@@ -2,7 +2,6 @@
 bin_PROGRAMS = dump
 dump_SOURCES = \
 	src/dump.c \
-	src/mz_header.c \
 	src/ne_header.c \
 	src/ne_resource.c \
 	src/ne_segment.c \
