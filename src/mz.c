@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "semblance.h"
 #include "x86_instr.h"
@@ -34,6 +35,12 @@ static void print_header(struct header_mz *header) {
     printf("\n");
 }
 
+/* flags relating to specific instructions */
+#define INSTR_SCANNED   0x01    /* byte has been scanned */
+#define INSTR_VALID     0x02    /* byte begins an instruction */
+#define INSTR_JUMP      0x04    /* instruction is jumped to */
+#define INSTR_FUNC      0x08    /* instruction begins a function */
+
 #ifdef USE_WARN
 #define warn_at(...) \
     do { fprintf(stderr, "Warning: %05x: ", ip); \
@@ -42,7 +49,7 @@ static void print_header(struct header_mz *header) {
 #define warn_at(...)
 #endif
 
-static int print_instr(dword ip, byte *p, char *out) {
+static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
     instr_info instr = {0};
     char arg0[32] = {0}, arg1[32] = {0}, arg2[32] = {0};
     byte usedmem = 0;
@@ -89,6 +96,10 @@ static int print_instr(dword ip, byte *p, char *out) {
     for (; i<8; i++) {
         outp += sprintf(outp, "   ");
     }
+
+    /* mark instructions that are jumped to */
+    if (flags[ip] & INSTR_JUMP)
+        outp[-1] = '>';
 
     /* print prefixes, including (fake) prefixes if ours are invalid */
     if (instr.prefix & PREFIX_SEG_MASK) {
@@ -163,7 +174,7 @@ static int print_instr(dword ip, byte *p, char *out) {
     return len;
 }
 
-static void print_mz_code(dword start, dword length) {
+static void print_mz_code(dword start, dword length, byte *flags) {
     dword ip = 0;
     byte buffer[MAX_INSTR];
     char out[256];
@@ -171,21 +182,99 @@ static void print_mz_code(dword start, dword length) {
     while (ip < length) {
         fseek(f, start+ip, SEEK_SET);
 
+        /* find a valid instruction */
+        if (!(flags[ip] & INSTR_VALID)) {
+            if (opts & DISASSEMBLE_ALL) {
+                /* still skip zeroes */
+                if (read_byte() == 0) {
+                    printf("      ...\n");
+                    ip++;
+                }
+                while (read_byte() == 0) ip++;
+            } else {
+                printf("     ...\n");
+                while ((ip < length) && !(flags[ip] & INSTR_VALID)) ip++;
+            }
+        }
+
+        fseek(f, start+ip, SEEK_SET);
+        if (ip >= length) return;
+
         /* fixme: disassemble everything for now; we'll try to fix it later.
          * this is going to be a little more difficult since dos executables
          * unabashedly mix code and data, so we need to figure out a solution
          * for that. but we needed to do that anyway. */
-
-        /* fixme: also we should have scanning regardless */
 
         if (length-ip < sizeof(buffer))
             fread(buffer, 1, length-ip, f);
         else
             fread(buffer, 1, sizeof(buffer), f);
 
-        ip += print_instr(ip, buffer, out);
+        if (flags[ip] & INSTR_FUNC) {
+            printf("\n");
+            printf("%05x <no name>:\n", ip);
+        }
+
+        ip += print_instr(ip, buffer, out, flags);
         printf("%s\n", out);
     }
+}
+
+static void scan_segment(dword ip, dword start, dword length, byte *flags) {
+    byte buffer[MAX_INSTR];
+    instr_info instr;
+    int instr_length;
+    int i;
+
+    if (ip > length) {
+        warn_at("Attempt to scan past end of segment.\n");
+        return;
+    }
+
+    if ((flags[ip] & (INSTR_VALID|INSTR_SCANNED)) == INSTR_SCANNED)
+        warn_at("Attempt to scan byte that does not begin instruction.\n");
+
+    while (ip < length) {
+        /* check if we already read from here */
+        if (flags[ip] & INSTR_SCANNED) return;
+
+        /* read the instruction */
+        fseek(f, start+ip, SEEK_SET);
+        if (length-ip < sizeof(buffer))
+            fread(buffer, 1, length-ip, f);
+        else
+            fread(buffer, 1, sizeof(buffer), f);
+        instr_length = get_instr(ip, buffer, &instr, 0);
+
+        /* mark the bytes */
+        flags[ip] |= INSTR_VALID;
+        for (i = ip; i < ip+instr_length && i < length; i++) flags[i] |= INSTR_SCANNED;
+
+        if (i < ip+instr_length && i == length) break;
+
+        /* handle conditional and unconditional jumps */
+        if (instr.op.arg0 == REL8 || instr.op.arg0 == REL16) {
+            /* near relative jump, loop, or call */
+            if (!strcmp(instr.op.name, "call"))
+                flags[instr.arg0] |= INSTR_FUNC;
+            else
+                flags[instr.arg0] |= INSTR_JUMP;
+
+            /* scan it */
+            scan_segment(instr.arg0, start, length, flags);
+
+            if (!strcmp(instr.op.name, "jmp"))
+                return;
+        } else if (!strcmp(instr.op.name, "jmp")) {
+            return;
+        } else if (!strcmp(instr.op.name, "ret")) {
+            return;
+        }
+
+        ip += instr_length;
+    }
+
+    warn_at("Scan reached the end of segment.\n");
 }
 
 void dumpmz(void) {
@@ -205,10 +294,22 @@ void dumpmz(void) {
         print_header(&header);
 
     if (mode & DISASSEMBLE) {
-        dword length = ((header.e_cp - 1) * 512) + header.e_cblp;
-        if (header.e_cblp == 0) length += 512;
+        dword entry_point = realaddr(header.e_cs, header.e_ip);
+        byte *flags;
+        dword length;
 
-        print_mz_code(header.e_cparhdr * 16, length);
+        length = ((header.e_cp - 1) * 512) + header.e_cblp;
+        if (header.e_cblp == 0) length += 512;
+        flags = calloc(length, sizeof(byte));
+
+        /* Scan the segment */
+        if (entry_point > length)
+            warn("Entry point %05x exceeds segment length (%05x)\n", entry_point, length);
+        scan_segment(entry_point, header.e_cparhdr * 16, length, flags);
+
+        print_mz_code(header.e_cparhdr * 16, length, flags);
+
+        free(flags);
     }
 
     free(reloc_table);

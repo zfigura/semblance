@@ -346,9 +346,8 @@ static void scan_segment(word cs, word ip) {
         return;
     }
 
-    if ((seg->instr_flags[ip] & (INSTR_VALID|INSTR_SCANNED)) == INSTR_SCANNED) {
+    if ((seg->instr_flags[ip] & (INSTR_VALID|INSTR_SCANNED)) == INSTR_SCANNED)
         warn_at("Attempt to scan byte that does not begin instruction.\n");
-    }
 
     while (ip < seg->length) {
         /* check if we already read from here */
