@@ -30,7 +30,7 @@ static void dump_file(char *file){
     else if (magic == 0x454e)
         dumpne(offset_ne);
     else if (magic == 0x5a4d)
-        fprintf(stderr, "MZ support not yet implemented\n");
+        dumpmz();
     else
         fprintf(stderr, "unrecognized magic value: %c%c\n", magic & 0xff, magic >> 8);
 

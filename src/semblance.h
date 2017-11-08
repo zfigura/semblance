@@ -72,5 +72,6 @@ extern word resource_count;
 
 /* Entry points */
 void dumpne(long offset_ne);
+void dumpmz(void);
 
 #endif /* SEMBLANCE_H */

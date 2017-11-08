@@ -574,7 +574,7 @@ static void free_reloc(reloc *reloc_data, word reloc_count) {
     free(reloc_data);
 }
 
-void print_segments(word count, word align, word entry_cs, word entry_ip) {
+void print_ne_segments(word count, word align, word entry_cs, word entry_ip) {
     unsigned i, seg;
 
     segments = malloc(count * sizeof(segment));
