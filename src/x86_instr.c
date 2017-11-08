@@ -923,7 +923,20 @@ void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *i
         /* should always be relocated */
         break;
     case MOFFS16:
-        sprintf(out, (asm_syntax == GAS) ? "0x%04x" : "[%04Xh]", value);
+        if (asm_syntax == GAS) {
+            if (instr->prefix & PREFIX_SEG_MASK) {
+                get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
+                strcat(out, ":");
+            }
+            sprintf(out+strlen(out), "0x%04x", value);
+        } else {
+            out[0] = '[';
+            if (instr->prefix & PREFIX_SEG_MASK) {
+                get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
+                strcat(out, ":");
+            }
+            sprintf(out+strlen(out), "%04Xh]", value);
+        }
         *usedmem = 1;
         break;
     case DSBX:
