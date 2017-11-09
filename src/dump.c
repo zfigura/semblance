@@ -21,18 +21,16 @@ static void dump_file(char *file){
         fseek(f, 0x3c, SEEK_SET);
         offset_ne = read_dword();
         fseek(f, offset_ne, SEEK_SET);
-    }
+        magic = read_word();
 
-    magic = read_word();
-
-    if (magic == 0x4550)
-        fprintf(stderr, "PE support not yet implemented\n");
-    else if (magic == 0x454e)
-        dumpne(offset_ne);
-    else if (magic == 0x5a4d)
-        dumpmz();
-    else
-        fprintf(stderr, "unrecognized magic value: %c%c\n", magic & 0xff, magic >> 8);
+        if (magic == 0x4550)
+            fprintf(stderr, "PE support not yet implemented\n");
+        else if (magic == 0x454e)
+            dumpne(offset_ne);
+        else
+            dumpmz();
+    } else
+        fprintf(stderr, "File format not recognized\n");
 
     fclose(f);
     fflush(stdout);
