@@ -80,7 +80,7 @@ int main(int argc, char *argv[]){
     opts = 0;
     asm_syntax = NASM;
 
-    while ((opt = getopt_long(argc, argv, "a::CdDfhMosv", long_options, NULL)) >= 0){
+    while ((opt = getopt_long(argc, argv, "a::CdDfhM:osv", long_options, NULL)) >= 0){
         switch (opt) {
         case 'a': /* dump resources only */
         {
