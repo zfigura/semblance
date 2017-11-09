@@ -1,11 +1,14 @@
-Semblance version 1.0
+Semblance version 1.1
 =====================
 
 Semblance is eventually meant as a set of tools to manipulate assembly
 code. Currently it only contains a single program:
 
 dump - produce disassembly and other information from exectable files.
-       Currently only supports NE (New Executable) files.
+       Currently supports NE (New Executable) files as well as MZ (DOS
+       executable) files. Support for the latter is somewhat shaky
+       however (largely given the number of dirty tricks that DOS
+       programmers were known to pull).
 
 
 Installing
