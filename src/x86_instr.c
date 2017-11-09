@@ -116,22 +116,22 @@ static const op_info instructions[256] = {
     {0x6D, 8, 16, "ins",        ESDI,   DXS,    OP_STRING|OP_REP},
     {0x6E, 8,  8, "outs",       DXS,    DSSI,   OP_STRING|OP_REP},
     {0x6F, 8, 16, "outs",       DXS,    DSSI,   OP_STRING|OP_REP},
-    {0x70, 8,  0, "jo",         REL8},
-    {0x71, 8,  0, "jno",        REL8},
-    {0x72, 8,  0, "jb",         REL8},
-    {0x73, 8,  0, "jae",        REL8},
-    {0x74, 8,  0, "jz",         REL8},
-    {0x75, 8,  0, "jnz",        REL8},
-    {0x76, 8,  0, "jbe",        REL8},
-    {0x77, 8,  0, "ja",         REL8},
-    {0x78, 8,  0, "js",         REL8},
-    {0x79, 8,  0, "jns",        REL8},
-    {0x7A, 8,  0, "jp",         REL8},
-    {0x7B, 8,  0, "jnp",        REL8},
-    {0x7C, 8,  0, "jl",         REL8},
-    {0x7D, 8,  0, "jge",        REL8},
-    {0x7E, 8,  0, "jle",        REL8},
-    {0x7F, 8,  0, "jg",         REL8},
+    {0x70, 8,  0, "jo",         REL8,   0,      OP_BRANCH},
+    {0x71, 8,  0, "jno",        REL8,   0,      OP_BRANCH},
+    {0x72, 8,  0, "jb",         REL8,   0,      OP_BRANCH},
+    {0x73, 8,  0, "jae",        REL8,   0,      OP_BRANCH},
+    {0x74, 8,  0, "jz",         REL8,   0,      OP_BRANCH},
+    {0x75, 8,  0, "jnz",        REL8,   0,      OP_BRANCH},
+    {0x76, 8,  0, "jbe",        REL8,   0,      OP_BRANCH},
+    {0x77, 8,  0, "ja",         REL8,   0,      OP_BRANCH},
+    {0x78, 8,  0, "js",         REL8,   0,      OP_BRANCH},
+    {0x79, 8,  0, "jns",        REL8,   0,      OP_BRANCH},
+    {0x7A, 8,  0, "jp",         REL8,   0,      OP_BRANCH},
+    {0x7B, 8,  0, "jnp",        REL8,   0,      OP_BRANCH},
+    {0x7C, 8,  0, "jl",         REL8,   0,      OP_BRANCH},
+    {0x7D, 8,  0, "jge",        REL8,   0,      OP_BRANCH},
+    {0x7E, 8,  0, "jle",        REL8,   0,      OP_BRANCH},
+    {0x7F, 8,  0, "jg",         REL8,   0,      OP_BRANCH},
     {0x80, 8},  /* arithmetic operations */
     {0x81, 8},
     {0x82, 8},  /* alias for 80 */
@@ -198,20 +198,20 @@ static const op_info instructions[256] = {
     {0xBF, 8, 16, "mov",        DI,     IMM},
     {0xC0, 8},  /* rotate/shift */
     {0xC1, 8},  /* rotate/shift */
-    {0xC2, 8,  0, "ret",        IMM16},
-    {0xC3, 8,  0, "ret"},       /* fixme: rep? */
+    {0xC2, 8,  0, "ret",        IMM16,  0,      OP_STOP},
+    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP},       /* fixme: rep? */
     {0xC4, 8, 16, "les",        REG,    MEM},
     {0xC5, 8, 16, "lds",        REG,    MEM},
     {0xC6, 0},  /* mov (subcode 0 only) */
     {0xC7, 0},  /* mov (subcode 0 only) */
     {0xC8, 8,  0, "enter",      IMM16,  IMM8},
     {0xC9, 8,  0, "leave"},
-    {0xCA, 8, 16, "ret",        IMM16,  0,      OP_FAR},        /* a change in bitness should only happen across segment boundaries */
-    {0xCB, 8, 16, "ret",        0,      0,      OP_FAR},
+    {0xCA, 8, 16, "ret",        IMM16,  0,      OP_STOP|OP_FAR},    /* a change in bitness should only happen across segment boundaries */
+    {0xCB, 8, 16, "ret",        0,      0,      OP_STOP|OP_FAR},
     {0xCC, 8,  0, "int3"},
     {0xCD, 8,  0, "int",        IMM8},
     {0xCE, 8,  0, "into"},
-    {0xCF, 8,  0, "iret"},
+    {0xCF, 8,  0, "iret",       0,      0,      OP_STOP},
     {0xD0, 8},  /* rotate/shift */
     {0xD1, 8},  /* rotate/shift */
     {0xD2, 8},  /* rotate/shift */
@@ -228,18 +228,18 @@ static const op_info instructions[256] = {
     {0xDD, 8},  /* float ops */
     {0xDE, 8},  /* float ops */
     {0xDF, 8},  /* float ops */
-    {0xE0, 8,  0, "loopnz",     REL8},  /* fixme: how to print this? */
-    {0xE1, 8,  0, "loopz",      REL8},
-    {0xE2, 8,  0, "loop",       REL8},
-    {0xE3, 8,  0, "jcxz",       REL8},  /* handled separately */
+    {0xE0, 8,  0, "loopnz",     REL8,   0,      OP_BRANCH},  /* fixme: how to print this? */
+    {0xE1, 8,  0, "loopz",      REL8,   0,      OP_BRANCH},
+    {0xE2, 8,  0, "loop",       REL8,   0,      OP_BRANCH},
+    {0xE3, 8,  0, "jcxz",       REL8,   0,      OP_BRANCH},  /* name handled separately */
     {0xE4, 8,  8, "in",         AL,     IMM},
     {0xE5, 8, 16, "in",         AX,     IMM},
     {0xE6, 8,  8, "out",        IMM,    AL},
     {0xE7, 8, 16, "out",        IMM,    AX},
-    {0xE8, 8,  0, "call",       REL16},
-    {0xE9, 8,  0, "jmp",        REL16},
-    {0xEA, 8, 16, "jmp",        PTR32,  0,      OP_FAR},        /* a change in bitness should only happen across segment boundaries */
-    {0xEB, 8,  0, "jmp",        REL8},
+    {0xE8, 8,  0, "call",       REL16,  0,      OP_BRANCH},
+    {0xE9, 8,  0, "jmp",        REL16,  0,      OP_BRANCH|OP_STOP},
+    {0xEA, 8, 16, "jmp",        PTR32,  0,      OP_FAR|OP_STOP},    /* a change in bitness should only happen across segment boundaries */
+    {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
     {0xEC, 8,  0, "in",         AL,     DX},
     {0xED, 8,  0, "in",         AX,     DX},
     {0xEE, 8,  0, "out",        DX,     AL},
@@ -374,8 +374,8 @@ static const op_info instructions_group[] = {
     {0xFF, 1, 16, "dec",        RM,     0,      OP_LOCK},
     {0xFF, 2,  0, "call",       RM},
     {0xFF, 3, 16, "call",       MEM,    0,      OP_FAR},        /* a change in bitness should only happen across segment boundaries */
-    {0xFF, 4,  0, "jmp",        RM},
-    {0xFF, 5, 16, "jmp",        MEM,    0,      OP_FAR},        /* a change in bitness should only happen across segment boundaries */
+    {0xFF, 4,  0, "jmp",        RM,     0,      OP_STOP},
+    {0xFF, 5, 16, "jmp",        MEM,    0,      OP_STOP|OP_FAR},    /* a change in bitness should only happen across segment boundaries */
     {0xFF, 6, 16, "push",       RM},
 };
 
@@ -415,22 +415,22 @@ static const op_info instructions_0F[] = {
     /* 25 unused */
     {0x26, 8,  0, "mov",        TR32,   REG32},
 
-    {0x80, 8,  0, "jo",         REL16},
-    {0x81, 8,  0, "jno",        REL16},
-    {0x82, 8,  0, "jb",         REL16},
-    {0x83, 8,  0, "jae",        REL16},
-    {0x84, 8,  0, "jz",         REL16},
-    {0x85, 8,  0, "jnz",        REL16},
-    {0x86, 8,  0, "jbe",        REL16},
-    {0x87, 8,  0, "ja",         REL16},
-    {0x88, 8,  0, "js",         REL16},
-    {0x89, 8,  0, "jns",        REL16},
-    {0x8A, 8,  0, "jp",         REL16},
-    {0x8B, 8,  0, "jnp",        REL16},
-    {0x8C, 8,  0, "jl",         REL16},
-    {0x8D, 8,  0, "jge",        REL16},
-    {0x8E, 8,  0, "jle",        REL16},
-    {0x8F, 8,  0, "jg",         REL16},
+    {0x80, 8,  0, "jo",         REL16,  0,      OP_BRANCH},
+    {0x81, 8,  0, "jno",        REL16,  0,      OP_BRANCH},
+    {0x82, 8,  0, "jb",         REL16,  0,      OP_BRANCH},
+    {0x83, 8,  0, "jae",        REL16,  0,      OP_BRANCH},
+    {0x84, 8,  0, "jz",         REL16,  0,      OP_BRANCH},
+    {0x85, 8,  0, "jnz",        REL16,  0,      OP_BRANCH},
+    {0x86, 8,  0, "jbe",        REL16,  0,      OP_BRANCH},
+    {0x87, 8,  0, "ja",         REL16,  0,      OP_BRANCH},
+    {0x88, 8,  0, "js",         REL16,  0,      OP_BRANCH},
+    {0x89, 8,  0, "jns",        REL16,  0,      OP_BRANCH},
+    {0x8A, 8,  0, "jp",         REL16,  0,      OP_BRANCH},
+    {0x8B, 8,  0, "jnp",        REL16,  0,      OP_BRANCH},
+    {0x8C, 8,  0, "jl",         REL16,  0,      OP_BRANCH},
+    {0x8D, 8,  0, "jge",        REL16,  0,      OP_BRANCH},
+    {0x8E, 8,  0, "jle",        REL16,  0,      OP_BRANCH},
+    {0x8F, 8,  0, "jg",         REL16,  0,      OP_BRANCH},
     {0x90, 0,  8, "seto",       RM},
     {0x91, 0,  8, "setno",      RM},
     {0x92, 0,  8, "setb",       RM},

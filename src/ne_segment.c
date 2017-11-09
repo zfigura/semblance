@@ -401,10 +401,7 @@ static void scan_segment(word cs, word ip) {
                     break;
                 }
             }
-
-            if (!strcmp(instr.op.name, "jmp"))
-                return;
-        } else if (instr.op.arg0 == REL8 || instr.op.arg0 == REL16) {
+        } else if (instr.op.flags & OP_BRANCH) {
             /* near relative jump, loop, or call */
             if (!strcmp(instr.op.name, "call"))
                 seg->instr_flags[instr.arg0] |= INSTR_FUNC;
@@ -413,15 +410,10 @@ static void scan_segment(word cs, word ip) {
 
             /* scan it */
             scan_segment(cs, instr.arg0);
-
-            if (!strcmp(instr.op.name, "jmp"))
-                return;
-        } else if (!strcmp(instr.op.name, "jmp")) {
-            /* i.e. 0xFF jump to memory */
-            return;
-        } else if (!strcmp(instr.op.name, "ret")) {
-            return;
         }
+
+        if (instr.op.flags & OP_STOP)
+            return;
 
         ip += instr_length;
     }

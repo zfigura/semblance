@@ -240,6 +240,7 @@ static void scan_segment(dword ip, dword start, dword length, byte *flags) {
 
         /* read the instruction */
         fseek(f, start+ip, SEEK_SET);
+        memset(buffer, 0, sizeof(buffer));  // fixme
         if (length-ip < sizeof(buffer))
             fread(buffer, 1, length-ip, f);
         else
@@ -253,7 +254,7 @@ static void scan_segment(dword ip, dword start, dword length, byte *flags) {
         if (i < ip+instr_length && i == length) break;
 
         /* handle conditional and unconditional jumps */
-        if (instr.op.arg0 == REL8 || instr.op.arg0 == REL16) {
+        if (instr.op.flags & OP_BRANCH) {
             /* near relative jump, loop, or call */
             if (!strcmp(instr.op.name, "call"))
                 flags[instr.arg0] |= INSTR_FUNC;
@@ -262,14 +263,10 @@ static void scan_segment(dword ip, dword start, dword length, byte *flags) {
 
             /* scan it */
             scan_segment(instr.arg0, start, length, flags);
-
-            if (!strcmp(instr.op.name, "jmp"))
-                return;
-        } else if (!strcmp(instr.op.name, "jmp")) {
-            return;
-        } else if (!strcmp(instr.op.name, "ret")) {
-            return;
         }
+
+        if (instr.op.flags & OP_STOP)
+            return;
 
         ip += instr_length;
     }
@@ -305,6 +302,7 @@ void dumpmz(void) {
         /* Scan the segment */
         if (entry_point > length)
             warn("Entry point %05x exceeds segment length (%05x)\n", entry_point, length);
+        flags[entry_point] |= INSTR_FUNC;
         scan_segment(entry_point, header.e_cparhdr * 16, length, flags);
 
         print_mz_code(header.e_cparhdr * 16, length, flags);

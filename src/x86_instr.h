@@ -59,6 +59,9 @@ enum arg {
 #define OP_S            0x1000  /* (FPU) op takes -s if GCC */
 #define OP_L            0x2000  /* (FPU) op takes -l if GCC */
 #define OP_LL           0x3000  /* (FPU) op takes -ll if GCC */
+
+#define OP_STOP         0x4000  /* stop scanning (jmp, ret) */
+#define OP_BRANCH       0x8000  /* branch to target (jmp, jXX) */
 /* -t doesn't need to be marked */
 
 typedef struct {
