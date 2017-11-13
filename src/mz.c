@@ -88,6 +88,14 @@ static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
         warn_at("Unknown opcode %2X (extension %d)\n", instr.op.opcode, instr.op.subcode);
 
     /* okay, now we begin dumping */
+    if ((flags[ip] & INSTR_JUMP) && (opts & COMPILABLE)) {
+        /* output a label, which is like an address but without the segment prefix */
+        /* FIXME: check masm */
+        if (asm_syntax == NASM)
+            outp += sprintf(outp, ".");
+        outp += sprintf(outp, "%05x:", ip);
+    }
+
     if (!(opts & NO_SHOW_ADDRESSES))
         outp += sprintf(outp, "%05x:", ip);
     outp += sprintf(outp, "\t");

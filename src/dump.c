@@ -43,10 +43,6 @@ static const char help_message[] =
 "Available options:\n"
 "\t-a, --resource                       Print embedded resources.\n"
 "\t-c, --compilable                     Produce output that can be compiled.\n"
-"\t                                     Equivalent to specifying all of the following:\n"
-"\t--no-show-addresses                  Don't print instruction addresses.\n"
-"\t--no-show-jump-target                Don't mark instructions that are jumped to.\n"
-"\t--no-show-raw-insn                   Don't print raw instruction hex code.\n"
 "\t-C, --demangle                       Demangle C++ function names.\n"
 "\t-d, --disassemble                    Print disassembled machine code.\n"
 "\t-f, --file-headers                   Print contents of the file header.\n"
@@ -60,6 +56,8 @@ static const char help_message[] =
 "\t-o, --specfile                       Create a specfile from exports.\n"
 "\t-s, --full-contents                  Display all information (default).\n"
 "\t-v, --version                        Print the version number of dumpne.\n"
+"\t--no-show-addresses                  Don't print instruction addresses.\n"
+"\t--no-show-raw-insn                   Don't print raw instruction hex code.\n"
 ;
 
 static const struct option long_options[] = {
@@ -77,7 +75,6 @@ static const struct option long_options[] = {
     {"specfile",                no_argument,        NULL, 'o'},
     {"full-contents",           no_argument,        NULL, 's'},
     {"version",                 no_argument,        NULL, 'v'},
-    {"no-show-jump-target",     no_argument,        NULL, NO_SHOW_JUMP_TARGET},
     {"no-show-raw-insn",        no_argument,        NULL, NO_SHOW_RAW_INSN},
     {"no-prefix-addresses",     no_argument,        NULL, NO_SHOW_ADDRESSES},
     {0}
@@ -97,9 +94,6 @@ int main(int argc, char *argv[]){
             break;
         case NO_SHOW_ADDRESSES:
             opts |= NO_SHOW_ADDRESSES;
-            break;
-        case NO_SHOW_JUMP_TARGET:
-            opts |= NO_SHOW_JUMP_TARGET;
             break;
         case 'a': /* dump resources only */
         {
@@ -138,7 +132,7 @@ int main(int argc, char *argv[]){
             break;
         }
         case 'c': /* compilable */
-            opts |= NO_SHOW_RAW_INSN|NO_SHOW_ADDRESSES|NO_SHOW_JUMP_TARGET;
+            opts |= COMPILABLE|NO_SHOW_ADDRESSES|NO_SHOW_RAW_INSN;
             break;
         case 'C': /* demangle */
             opts |= DEMANGLE;

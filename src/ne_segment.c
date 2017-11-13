@@ -190,6 +190,14 @@ static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, 
         warn_at("Unknown opcode %2X (extension %d)\n", instr.op.opcode, instr.op.subcode);
 
     /* okay, now we begin dumping */
+    if ((flags[ip] & INSTR_JUMP) && (opts & COMPILABLE)) {
+        /* output a label, which is like an address but without the segment prefix */
+        /* FIXME: check masm */
+        if (asm_syntax == NASM)
+            outp += sprintf(outp, ".");
+        outp += sprintf(outp, "%04x:", ip);
+    }
+
     if (!(opts & NO_SHOW_ADDRESSES))
         outp += sprintf(outp, "%4d.%04x:", cs, ip);
     outp += sprintf(outp, "\t");
@@ -205,7 +213,7 @@ static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, 
     }
 
     /* mark instructions that are jumped to */
-    if (flags[ip] & INSTR_JUMP && !(opts & NO_SHOW_JUMP_TARGET)) {
+    if ((flags[ip] & INSTR_JUMP) && !(opts & COMPILABLE)) {
         outp[-1] = '>';
         if (flags[ip] & INSTR_FAR) {
             outp[-2] = '>';
@@ -270,7 +278,8 @@ static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, 
             outp += sprintf(outp, ", %s", arg2);
     }
     if (comment) {
-        outp += sprintf(outp, "\t<%s>", comment);
+        outp += sprintf(outp, asm_syntax == GAS ? "\t// " : "\t;");
+        outp += sprintf(outp, " <%s>", comment);
     }
 
     /* if we have more than 7 bytes on this line, wrap around */
