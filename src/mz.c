@@ -88,13 +88,18 @@ static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
         warn_at("Unknown opcode %2X (extension %d)\n", instr.op.opcode, instr.op.subcode);
 
     /* okay, now we begin dumping */
-    outp += sprintf(outp, "%05x:\t", ip);
+    if (!(opts & NO_SHOW_ADDRESSES))
+        outp += sprintf(outp, "%05x:", ip);
+    outp += sprintf(outp, "\t");
 
-    for (i=0; i<len && i<7; i++) {
-        outp += sprintf(outp, "%02x ", p[i]);
-    }
-    for (; i<8; i++) {
-        outp += sprintf(outp, "   ");
+    if (!(opts & NO_SHOW_RAW_INSN))
+        {
+        for (i=0; i<len && i<7; i++) {
+            outp += sprintf(outp, "%02x ", p[i]);
+        }
+        for (; i<8; i++) {
+            outp += sprintf(outp, "   ");
+        }
     }
 
     /* mark instructions that are jumped to */
@@ -160,7 +165,7 @@ static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
     }
 
     /* if we have more than 7 bytes on this line, wrap around */
-    if (len > 7) {
+    if (len > 7 && !(opts & NO_SHOW_RAW_INSN)) {
         if (asm_syntax == GAS)
             outp += sprintf(outp, "\n%05x:\t", ip+7);
         else

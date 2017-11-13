@@ -42,8 +42,14 @@ static const char help_message[] =
 "Usage: dump [options] <file(s)>\n"
 "Available options:\n"
 "\t-a, --resource                       Print embedded resources.\n"
+"\t-c, --compilable                     Produce output that can be compiled.\n"
+"\t                                     Equivalent to specifying all of the following:\n"
+"\t--no-show-addresses                  Don't print instruction addresses.\n"
+"\t--no-show-jump-target                Don't mark instructions that are jumped to.\n"
+"\t--no-show-raw-insn                   Don't print raw instruction hex code.\n"
+"\t-C, --demangle                       Demangle C++ function names.\n"
 "\t-d, --disassemble                    Print disassembled machine code.\n"
-"\t-f, --file-headers                   Print contents of the overall file header.\n"
+"\t-f, --file-headers                   Print contents of the file header.\n"
 "\t-h, --help                           Display this help message.\n"
 "\t-M, --disassembler-options=[...]     Extended options for disassembly.\n"
 "\t\tatt        Alias for `gas'.\n"
@@ -58,6 +64,7 @@ static const char help_message[] =
 
 static const struct option long_options[] = {
     {"resource",                optional_argument,  NULL, 'a'},
+    {"compilable",              no_argument,        NULL, 'c'},
     {"demangle",                no_argument,        NULL, 'C'},
     {"disassemble",             no_argument,        NULL, 'd'},
     {"disassemble-all",         no_argument,        NULL, 'D'},
@@ -70,6 +77,9 @@ static const struct option long_options[] = {
     {"specfile",                no_argument,        NULL, 'o'},
     {"full-contents",           no_argument,        NULL, 's'},
     {"version",                 no_argument,        NULL, 'v'},
+    {"no-show-jump-target",     no_argument,        NULL, NO_SHOW_JUMP_TARGET},
+    {"no-show-raw-insn",        no_argument,        NULL, NO_SHOW_RAW_INSN},
+    {"no-prefix-addresses",     no_argument,        NULL, NO_SHOW_ADDRESSES},
     {0}
 };
 
@@ -80,8 +90,17 @@ int main(int argc, char *argv[]){
     opts = 0;
     asm_syntax = NASM;
 
-    while ((opt = getopt_long(argc, argv, "a::CdDfhM:osv", long_options, NULL)) >= 0){
+    while ((opt = getopt_long(argc, argv, "a::cCdDfhM:osv", long_options, NULL)) >= 0){
         switch (opt) {
+        case NO_SHOW_RAW_INSN:
+            opts |= NO_SHOW_RAW_INSN;
+            break;
+        case NO_SHOW_ADDRESSES:
+            opts |= NO_SHOW_ADDRESSES;
+            break;
+        case NO_SHOW_JUMP_TARGET:
+            opts |= NO_SHOW_JUMP_TARGET;
+            break;
         case 'a': /* dump resources only */
         {
             int ret;
@@ -118,6 +137,9 @@ int main(int argc, char *argv[]){
             }
             break;
         }
+        case 'c': /* compilable */
+            opts |= NO_SHOW_RAW_INSN|NO_SHOW_ADDRESSES|NO_SHOW_JUMP_TARGET;
+            break;
         case 'C': /* demangle */
             opts |= DEMANGLE;
             break;

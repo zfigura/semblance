@@ -51,8 +51,11 @@ static inline void skip_padding(char bytes){
 #define SPECFILE        0x80
 word mode; /* what to dump */
 
-#define DISASSEMBLE_ALL 0x01
-#define DEMANGLE        0x02
+#define DISASSEMBLE_ALL     0x01
+#define DEMANGLE            0x02
+#define NO_SHOW_RAW_INSN    0x04
+#define NO_SHOW_ADDRESSES   0x08
+#define NO_SHOW_JUMP_TARGET 0x10
 word opts; /* additional options */
 
 #define MAXARGS		256
