@@ -872,9 +872,8 @@ static const char modrm16_masm[8][6] = {
  * value   - [i] value of argument being processed
  * argtype - [i] type of argument being processed
  * instr   - [i] pointer to the relevant instr_info
- * usedmem - [o] did we use a memory argument (needed for sanity checks)
  */
-void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr, byte *usedmem) {
+void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr) {
     *out = '\0';
 
     if (argtype >= AL && argtype <= BH)
@@ -937,7 +936,7 @@ void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *i
             }
             sprintf(out+strlen(out), "%04Xh]", value);
         }
-        *usedmem = 1;
+        instr->usedmem = 1;
         break;
     case DSBX:
     case DSSI:
@@ -952,7 +951,7 @@ void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *i
             strcat(out, (argtype == DSBX) ? "bx" : "si");
             strcat(out, (asm_syntax == GAS) ? ")" : "]");
         }
-        *usedmem = 1;
+        instr->usedmem = 1;
         break;
     case ESDI:
         if (asm_syntax != NASM) {
@@ -962,7 +961,7 @@ void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *i
             strcat(out, "di");
             strcat(out, (asm_syntax == GAS) ? ")" : "]");
         }
-        *usedmem = 1;
+        instr->usedmem = 1;
         break;
     case ALS:
         if (asm_syntax == GAS)
@@ -996,7 +995,7 @@ void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *i
             break;
         }
 
-        *usedmem = 1;
+        instr->usedmem = 1;
 
         /* NASM: <size>    [<seg>: <reg>+<reg>+/-<offset>h] */
         /* MASM: <size> ptr <seg>:[<reg>+<reg>+/-<offset>h] */

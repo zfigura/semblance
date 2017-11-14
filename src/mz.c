@@ -52,7 +52,6 @@ static void print_header(struct header_mz *header) {
 static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
     instr_info instr = {0};
     char arg0[32] = {0}, arg1[32] = {0}, arg2[32] = {0};
-    byte usedmem = 0;
     unsigned len;
 
     char *outp = out;
@@ -74,14 +73,14 @@ static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
 
     sprintf(ip_string, "%05x", ip);
 
-    print_arg(ip_string, arg0, instr.arg0, instr.op.arg0, &instr, &usedmem);
-    print_arg(ip_string, arg1, instr.arg1, instr.op.arg1, &instr, &usedmem);
+    print_arg(ip_string, arg0, instr.arg0, instr.op.arg0, &instr);
+    print_arg(ip_string, arg1, instr.arg1, instr.op.arg1, &instr);
     if (instr.op.flags & OP_ARG2_IMM)
-        print_arg(ip_string, arg2, instr.arg2, IMM, &instr, &usedmem);
+        print_arg(ip_string, arg2, instr.arg2, IMM, &instr);
     else if (instr.op.flags & OP_ARG2_IMM8)
-        print_arg(ip_string, arg2, instr.arg2, IMM8, &instr, &usedmem);
+        print_arg(ip_string, arg2, instr.arg2, IMM8, &instr);
     else if (instr.op.flags & OP_ARG2_CL)
-        print_arg(ip_string, arg2, instr.arg2, CL, &instr, &usedmem);
+        print_arg(ip_string, arg2, instr.arg2, CL, &instr);
 
     /* check that we have a valid instruction */
     if (instr.op.name[0] == '?')
@@ -117,7 +116,7 @@ static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
     /* print prefixes, including (fake) prefixes if ours are invalid */
     if (instr.prefix & PREFIX_SEG_MASK) {
         /* note: is it valid to use overrides with lods and outs? */
-        if (!usedmem || (instr.op.arg0 == ESDI || (instr.op.arg1 == ESDI && instr.op.arg0 != DSSI))) {  /* can't be overridden */
+        if (!instr.usedmem || (instr.op.arg0 == ESDI || (instr.op.arg1 == ESDI && instr.op.arg0 != DSSI))) {  /* can't be overridden */
             warn_at("Segment prefix %s used with opcode 0x%02x %s\n", seg16[(instr.prefix & PREFIX_SEG_MASK)-1], instr.op.opcode, instr.op.name);
             outp += sprintf(outp, "%s ", seg16[(instr.prefix & PREFIX_SEG_MASK)-1]);
         }
@@ -128,7 +127,7 @@ static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
     }
     if ((instr.prefix & PREFIX_ADDR32) && (asm_syntax == NASM) && (instr.op.flags & OP_STRING)) {
         outp += sprintf(outp, "a32 ");
-    } else if ((instr.prefix & PREFIX_ADDR32) && !usedmem && instr.op.opcode != 0xE3) { /* jecxz */
+    } else if ((instr.prefix & PREFIX_ADDR32) && !instr.usedmem && instr.op.opcode != 0xE3) { /* jecxz */
         warn_at("Address-size prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
         outp += sprintf(outp, (asm_syntax == GAS) ? "addr32 " : "a32 "); /* fixme: how should MASM print it? */
     }

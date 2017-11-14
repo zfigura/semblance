@@ -110,10 +110,11 @@ typedef struct {
     byte modrm_reg;
     byte sib_scale;
     byte sib_index;
+    int usedmem:1;  /* used for error checking */
 } instr_info;
 
 extern int get_instr(word ip, const byte *p, instr_info *instr, int is32);
-extern void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr, byte *usedmem);
+extern void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr);
 extern word get_prefix(byte opcode);
 
 /* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
