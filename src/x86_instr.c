@@ -667,7 +667,7 @@ static const op_info instructions_fpu_single[] = {
 };
 
 /* returns the flag if it's a prefix, 0 otherwise */
-word get_prefix(byte opcode) {
+static word get_prefix(byte opcode) {
     switch(opcode) {
     case 0x26: return PREFIX_ES;
     case 0x2E: return PREFIX_CS;
@@ -703,7 +703,7 @@ word get_prefix(byte opcode) {
  * Does not process specific arguments (e.g. registers, DSBX, ONE...)
  * The parameter out is given as a dword but may require additional casting.
  */
-int get_arg(word ip, const byte *p, dword *value, enum arg argtype, instr_info *instr, int is32) {
+static int get_arg(word ip, const byte *p, dword *value, enum arg argtype, instr_info *instr, int is32) {
     *value = 0;
 
     switch (argtype) {
@@ -873,7 +873,7 @@ static const char modrm16_masm[8][6] = {
  * argtype - [i] type of argument being processed
  * instr   - [i] pointer to the relevant instr_info
  */
-void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr) {
+static void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr) {
     *out = '\0';
 
     if (argtype >= AL && argtype <= BH)
@@ -1388,4 +1388,136 @@ int get_instr(word ip, const byte *p, instr_info *instr, int is32) {
         strcat(instr->op.name, "f");
 
     return len;
+}
+
+void print_instr(char *out, char *ip, byte *p, int len, byte flags, instr_info *instr, char *arg0, char *arg1, char *comment) {
+    char arg2[32] = "";
+    int i;
+
+    /* get the arguments */
+
+    if (!arg0[0]) print_arg(ip, arg0, instr->arg0, instr->op.arg0, instr);
+    if (!arg1[0]) print_arg(ip, arg1, instr->arg1, instr->op.arg1, instr);
+
+    if (instr->op.flags & OP_ARG2_IMM)
+        print_arg(ip, arg2, instr->arg2, IMM, instr);
+    else if (instr->op.flags & OP_ARG2_IMM8)
+        print_arg(ip, arg2, instr->arg2, IMM8, instr);
+    else if (instr->op.flags & OP_ARG2_CL)
+        print_arg(ip, arg2, instr->arg2, CL, instr);
+
+    /* did we find too many prefixes? */
+    if (get_prefix(instr->op.opcode)) {
+        if (get_prefix(instr->op.opcode) & PREFIX_SEG_MASK)
+            warn_at("Multiple segment prefixes found: %s, %s. Skipping to next instruction.\n",
+                    seg16[(instr->prefix & PREFIX_SEG_MASK)-1], instr->op.name);
+        else
+            warn_at("Prefix specified twice: %s. Skipping to next instruction.\n", instr->op.name);
+    }
+
+    /* check that the instruction exists */
+    if (instr->op.name[0] == '?')
+        warn_at("Unknown opcode %2X (extension %d)\n", instr->op.opcode, instr->op.subcode);
+
+    /* okay, now we begin dumping */
+    if ((flags & INSTR_JUMP) && (opts & COMPILABLE)) {
+        /* output a label, which is like an address but without the segment prefix */
+        /* FIXME: check masm */
+        if (asm_syntax == NASM)
+            out += sprintf(out, ".");
+        out += sprintf(out, "%s:", ip);
+    }
+
+    if (!(opts & NO_SHOW_ADDRESSES))
+        out += sprintf(out, "%s:", ip);
+    out += sprintf(out, "\t");
+
+    if (!(opts & NO_SHOW_RAW_INSN))
+        {
+        for (i=0; i<len && i<7; i++) {
+            out += sprintf(out, "%02x ", p[i]);
+        }
+        for (; i<8; i++) {
+            out += sprintf(out, "   ");
+        }
+    }
+
+    /* mark instructions that are jumped to */
+    if ((flags & INSTR_JUMP) && !(opts & COMPILABLE)) {
+        out[-1] = '>';
+        if (flags & INSTR_FAR) {
+            out[-2] = '>';
+        }
+    }
+
+    /* print prefixes, including (fake) prefixes if ours are invalid */
+    if (instr->prefix & PREFIX_SEG_MASK) {
+        /* note: is it valid to use overrides with lods and outs? */
+        if (!instr->usedmem || (instr->op.arg0 == ESDI || (instr->op.arg1 == ESDI && instr->op.arg0 != DSSI))) {  /* can't be overridden */
+            warn_at("Segment prefix %s used with opcode 0x%02x %s\n", seg16[(instr->prefix & PREFIX_SEG_MASK)-1], instr->op.opcode, instr->op.name);
+            out += sprintf(out, "%s ", seg16[(instr->prefix & PREFIX_SEG_MASK)-1]);
+        }
+    }
+    if ((instr->prefix & PREFIX_OP32) && instr->op.size != 16 && instr->op.size != 32) {
+        warn_at("Operand-size override used with opcode %2X %s\n", instr->op.opcode, instr->op.name);
+        out += sprintf(out, (asm_syntax == GAS) ? "data32 " : "o32 "); /* fixme: how should MASM print it? */
+    }
+    if ((instr->prefix & PREFIX_ADDR32) && (asm_syntax == NASM) && (instr->op.flags & OP_STRING)) {
+        out += sprintf(out, "a32 ");
+    } else if ((instr->prefix & PREFIX_ADDR32) && !instr->usedmem && instr->op.opcode != 0xE3) { /* jecxz */
+        warn_at("Address-size prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
+        out += sprintf(out, (asm_syntax == GAS) ? "addr32 " : "a32 "); /* fixme: how should MASM print it? */
+    }
+    if (instr->prefix & PREFIX_LOCK) {
+        if(!(instr->op.flags & OP_LOCK))
+            warn_at("lock prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
+        out += sprintf(out, "lock ");
+    }
+    if (instr->prefix & PREFIX_REPNE) {
+        if(!(instr->op.flags & OP_REPNE))
+            warn_at("repne prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
+        out += sprintf(out, "repne ");
+    }
+    if (instr->prefix & PREFIX_REPE) {
+        if(!(instr->op.flags & OP_REPE))
+            warn_at("repe prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
+        out += sprintf(out, (instr->op.flags & OP_REPNE) ? "repe ": "rep ");
+    }
+
+    out += sprintf(out, "%s", instr->op.name);
+
+    if (arg0[0] || arg1[0])
+        out += sprintf(out,"\t");
+
+    if (asm_syntax == GAS) {
+        /* fixme: are all of these orderings correct? */
+        if (arg1[0])
+            out += sprintf(out, "%s,", arg1);
+        if (arg0[0])
+            out += sprintf(out, "%s", arg0);
+        if (arg2[0])
+            out += sprintf(out, ",%s", arg2);
+    } else {
+        if (arg0[0])
+            out += sprintf(out, "%s", arg0);
+        if (arg0[0] && arg1[0])
+            out += sprintf(out, ", ");
+        if (arg1[0])
+            out += sprintf(out, "%s", arg1);
+        if (arg2[0])
+            out += sprintf(out, ", %s", arg2);
+    }
+    if (comment) {
+        out += sprintf(out, asm_syntax == GAS ? "\t// " : "\t;");
+        out += sprintf(out, " <%s>", comment);
+    }
+
+    /* if we have more than 7 bytes on this line, wrap around */
+    if (len > 7 && !(opts & NO_SHOW_RAW_INSN)) {
+        out += sprintf(out, "\n\t\t");
+        for (i=7; i<len; i++) {
+            out += sprintf(out, "%02x ", p[i]);
+        }
+        out--; /* trailing space */
+    }
 }

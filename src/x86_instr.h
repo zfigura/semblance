@@ -114,10 +114,17 @@ typedef struct {
 } instr_info;
 
 extern int get_instr(word ip, const byte *p, instr_info *instr, int is32);
-extern void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr);
-extern word get_prefix(byte opcode);
+extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, instr_info *instr, char *arg0, char *arg1, char *comment);
 
 /* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
 #define MAX_INSTR       16
+
+/* flags relating to specific instructions */
+#define INSTR_SCANNED   0x01    /* byte has been scanned */
+#define INSTR_VALID     0x02    /* byte begins an instruction */
+#define INSTR_JUMP      0x04    /* instruction is jumped to */
+#define INSTR_FUNC      0x08    /* instruction begins a function */
+#define INSTR_FAR       0x10    /* instruction is target of far call/jmp */
+#define INSTR_RELOC     0x20    /* byte has relocation data */
 
 #endif /* __X86_INSTR_H */

@@ -49,144 +49,25 @@ static void print_header(struct header_mz *header) {
 #define warn_at(...)
 #endif
 
-static int print_instr(dword ip, byte *p, char *out, const byte *flags) {
+static int print_mz_instr(dword ip, byte *p, char *out, const byte *flags) {
     instr_info instr = {0};
-    char arg0[32] = {0}, arg1[32] = {0}, arg2[32] = {0};
+    char arg0[32] = {0}, arg1[32] = {0};
     unsigned len;
 
-    char *outp = out;
-    unsigned i;
     char ip_string[7];
 
     out[0] = 0;
 
     len = get_instr(ip, p, &instr, 0);
 
-    /* did we find too many prefixes? */
-    if (get_prefix(instr.op.opcode)) {
-        if (get_prefix(instr.op.opcode) & PREFIX_SEG_MASK)
-            warn_at("Multiple segment prefixes found: %s, %s. Skipping to next instruction.\n",
-                    seg16[(instr.prefix & PREFIX_SEG_MASK)-1], instr.op.name);
-        else
-            warn_at("Prefix specified twice: %s. Skipping to next instruction.\n", instr.op.name);
-    }
-
     sprintf(ip_string, "%05x", ip);
 
-    print_arg(ip_string, arg0, instr.arg0, instr.op.arg0, &instr);
-    print_arg(ip_string, arg1, instr.arg1, instr.op.arg1, &instr);
-    if (instr.op.flags & OP_ARG2_IMM)
-        print_arg(ip_string, arg2, instr.arg2, IMM, &instr);
-    else if (instr.op.flags & OP_ARG2_IMM8)
-        print_arg(ip_string, arg2, instr.arg2, IMM8, &instr);
-    else if (instr.op.flags & OP_ARG2_CL)
-        print_arg(ip_string, arg2, instr.arg2, CL, &instr);
-
-    /* check that we have a valid instruction */
-    if (instr.op.name[0] == '?')
-        warn_at("Unknown opcode %2X (extension %d)\n", instr.op.opcode, instr.op.subcode);
-
-    /* okay, now we begin dumping */
-    if ((flags[ip] & INSTR_JUMP) && (opts & COMPILABLE)) {
-        /* output a label, which is like an address but without the segment prefix */
-        /* FIXME: check masm */
-        if (asm_syntax == NASM)
-            outp += sprintf(outp, ".");
-        outp += sprintf(outp, "%05x:", ip);
-    }
-
-    if (!(opts & NO_SHOW_ADDRESSES))
-        outp += sprintf(outp, "%05x:", ip);
-    outp += sprintf(outp, "\t");
-
-    if (!(opts & NO_SHOW_RAW_INSN))
-        {
-        for (i=0; i<len && i<7; i++) {
-            outp += sprintf(outp, "%02x ", p[i]);
-        }
-        for (; i<8; i++) {
-            outp += sprintf(outp, "   ");
-        }
-    }
-
-    /* mark instructions that are jumped to */
-    if (flags[ip] & INSTR_JUMP)
-        outp[-1] = '>';
-
-    /* print prefixes, including (fake) prefixes if ours are invalid */
-    if (instr.prefix & PREFIX_SEG_MASK) {
-        /* note: is it valid to use overrides with lods and outs? */
-        if (!instr.usedmem || (instr.op.arg0 == ESDI || (instr.op.arg1 == ESDI && instr.op.arg0 != DSSI))) {  /* can't be overridden */
-            warn_at("Segment prefix %s used with opcode 0x%02x %s\n", seg16[(instr.prefix & PREFIX_SEG_MASK)-1], instr.op.opcode, instr.op.name);
-            outp += sprintf(outp, "%s ", seg16[(instr.prefix & PREFIX_SEG_MASK)-1]);
-        }
-    }
-    if ((instr.prefix & PREFIX_OP32) && instr.op.size != 16 && instr.op.size != 32) {
-        warn_at("Operand-size override used with opcode %2X %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, (asm_syntax == GAS) ? "data32 " : "o32 "); /* fixme: how should MASM print it? */
-    }
-    if ((instr.prefix & PREFIX_ADDR32) && (asm_syntax == NASM) && (instr.op.flags & OP_STRING)) {
-        outp += sprintf(outp, "a32 ");
-    } else if ((instr.prefix & PREFIX_ADDR32) && !instr.usedmem && instr.op.opcode != 0xE3) { /* jecxz */
-        warn_at("Address-size prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, (asm_syntax == GAS) ? "addr32 " : "a32 "); /* fixme: how should MASM print it? */
-    }
-    if (instr.prefix & PREFIX_LOCK) {
-        if(!(instr.op.flags & OP_LOCK))
-            warn_at("lock prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, "lock ");
-    }
-    if (instr.prefix & PREFIX_REPNE) {
-        if(!(instr.op.flags & OP_REPNE))
-            warn_at("repne prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, "repne ");
-    }
-    if (instr.prefix & PREFIX_REPE) {
-        if(!(instr.op.flags & OP_REPE))
-            warn_at("repe prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, (instr.op.flags & OP_REPNE) ? "repe ": "rep ");
-    }
-
-    outp += sprintf(outp, "%s", instr.op.name);
-
-    if (arg0[0] || arg1[0])
-        outp += sprintf(outp,"\t");
-
-    if (asm_syntax == GAS) {
-        /* fixme: are all of these orderings correct? */
-        if (arg1[0])
-            outp += sprintf(outp, "%s,", arg1);
-        if (arg0[0])
-            outp += sprintf(outp, "%s", arg0);
-        if (arg2[0])
-            outp += sprintf(outp, ",%s", arg2);
-    } else {
-        if (arg0[0])
-            outp += sprintf(outp, "%s", arg0);
-        if (arg0[0] && arg1[0])
-            outp += sprintf(outp, ", ");
-        if (arg1[0])
-            outp += sprintf(outp, "%s", arg1);
-        if (arg2[0])
-            outp += sprintf(outp, ", %s", arg2);
-    }
-
-    /* if we have more than 7 bytes on this line, wrap around */
-    if (len > 7 && !(opts & NO_SHOW_RAW_INSN)) {
-        if (asm_syntax == GAS)
-            outp += sprintf(outp, "\n%05x:\t", ip+7);
-        else
-            outp += sprintf(outp, "\n\t\t");
-        for (i=7; i<len; i++) {
-            outp += sprintf(outp, "%02x ", p[i]);
-        }
-        outp--; /* trailing space */
-    }
+    print_instr(out, ip_string, p, len, flags[ip], &instr, arg0, arg1, NULL);
 
     return len;
 }
 
-static void print_mz_code(dword start, dword length, byte *flags) {
+static void print_code(dword start, dword length, byte *flags) {
     dword ip = 0;
     byte buffer[MAX_INSTR];
     char out[256];
@@ -227,7 +108,7 @@ static void print_mz_code(dword start, dword length, byte *flags) {
             printf("%05x <no name>:\n", ip);
         }
 
-        ip += print_instr(ip, buffer, out, flags);
+        ip += print_mz_instr(ip, buffer, out, flags);
         printf("%s\n", out);
     }
 }
@@ -317,7 +198,7 @@ void dumpmz(void) {
         flags[entry_point] |= INSTR_FUNC;
         scan_segment(entry_point, header.e_cparhdr * 16, length, flags);
 
-        print_mz_code(header.e_cparhdr * 16, length, flags);
+        print_code(header.e_cparhdr * 16, length, flags);
 
         free(flags);
     }

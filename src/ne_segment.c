@@ -8,14 +8,6 @@
 #include "ne.h"
 #include "x86_instr.h"
 
-/* flags relating to specific instructions */
-#define INSTR_SCANNED   0x01    /* byte has been scanned */
-#define INSTR_VALID     0x02    /* byte begins an instruction */
-#define INSTR_JUMP      0x04    /* instruction is jumped to */
-#define INSTR_FUNC      0x08    /* instruction begins a function */
-#define INSTR_FAR       0x10    /* instruction is target of far call/jmp */
-#define INSTR_RELOC     0x20    /* byte has relocation data */
-
 #ifdef USE_WARN
 #define warn_at(...) \
     do { fprintf(stderr, "Warning: %d:%04x: ", cs, ip); \
@@ -82,43 +74,28 @@ static char *get_imported_name(word module, word ordinal) {
 }
 
 /* Returns the number of bytes processed (same as get_instr). */
-static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, const reloc *reloc_data, word reloc_count, int is32) {
+static int print_ne_instr(const segment *seg, word ip, byte *p, char *out) {
+    word cs = seg->cs;
     instr_info instr = {0};
-    char arg0[32] = {0}, arg1[32] = {0}, arg2[32] = {0};
+    char arg0[32] = "", arg1[32] = "";
     unsigned len;
 
-    char *outp = out;
     unsigned i;
     char *comment = NULL;
     char ip_string[10];
 
     out[0] = 0;
 
-    len = get_instr(ip, p, &instr, is32);
+    len = get_instr(ip, p, &instr, seg->flags & 0x2000);
 
-    /* did we find too many prefixes? */
-    if (get_prefix(instr.op.opcode)) {
-        if (get_prefix(instr.op.opcode) & PREFIX_SEG_MASK)
-            warn_at("Multiple segment prefixes found: %s, %s. Skipping to next instruction.\n",
-                    seg16[(instr.prefix & PREFIX_SEG_MASK)-1], instr.op.name);
-        else
-            warn_at("Prefix specified twice: %s. Skipping to next instruction.\n", instr.op.name);
-    }
+    sprintf(ip_string, "%3d:%04x", seg->cs, ip);
 
-    sprintf(ip_string, "%d:%04x", cs, ip);
-    print_arg(ip_string, arg0, instr.arg0, instr.op.arg0, &instr);
-    print_arg(ip_string, arg1, instr.arg1, instr.op.arg1, &instr);
-    if (instr.op.flags & OP_ARG2_IMM)
-        print_arg(ip_string, arg2, instr.arg2, IMM, &instr);
-    else if (instr.op.flags & OP_ARG2_IMM8)
-        print_arg(ip_string, arg2, instr.arg2, IMM8, &instr);
-    else if (instr.op.flags & OP_ARG2_CL)
-        print_arg(ip_string, arg2, instr.arg2, CL, &instr);
-
-    /* if we have relocations, discard one of the above and replace it */
-    for (i = ip; i < ip+len; i++) { /* fixme: don't read past length */
-        if (flags[i] & INSTR_RELOC) {
-            const reloc *r = get_reloc(cs, i, reloc_data, reloc_count);
+    /* check for relocations. ideally this should be done per argument, but
+     * this would require annoying refactoring of the code. there should only
+     * be one relocation per instruction anyway so don't bother. */
+    for (i = ip; i < ip+len; i++) {
+        if (seg->instr_flags[i] & INSTR_RELOC) {
+            const reloc *r = get_reloc(seg->cs, i, seg->reloc_table, seg->reloc_count);
             if (!r) break;
             char *module;
             if (r->type == 1 || r->type == 2)
@@ -184,114 +161,7 @@ static int print_instr(word cs, word ip, const byte *flags, byte *p, char *out, 
     if (instr.op.arg0 == REL16 && !comment)
         comment = get_entry_name(cs, instr.arg0);
 
-    /* check that we have a valid instruction */
-    if (instr.op.name[0] == '?')
-        warn_at("Unknown opcode %2X (extension %d)\n", instr.op.opcode, instr.op.subcode);
-
-    /* okay, now we begin dumping */
-    if ((flags[ip] & INSTR_JUMP) && (opts & COMPILABLE)) {
-        /* output a label, which is like an address but without the segment prefix */
-        /* FIXME: check masm */
-        if (asm_syntax == NASM)
-            outp += sprintf(outp, ".");
-        outp += sprintf(outp, "%04x:", ip);
-    }
-
-    if (!(opts & NO_SHOW_ADDRESSES))
-        outp += sprintf(outp, "%4d.%04x:", cs, ip);
-    outp += sprintf(outp, "\t");
-
-    if (!(opts & NO_SHOW_RAW_INSN))
-        {
-        for (i=0; i<len && i<7; i++) {
-            outp += sprintf(outp, "%02x ", p[i]);
-        }
-        for (; i<8; i++) {
-            outp += sprintf(outp, "   ");
-        }
-    }
-
-    /* mark instructions that are jumped to */
-    if ((flags[ip] & INSTR_JUMP) && !(opts & COMPILABLE)) {
-        outp[-1] = '>';
-        if (flags[ip] & INSTR_FAR) {
-            outp[-2] = '>';
-        }
-    }
-
-    /* print prefixes, including (fake) prefixes if ours are invalid */
-    if (instr.prefix & PREFIX_SEG_MASK) {
-        /* note: is it valid to use overrides with lods and outs? */
-        if (!instr.usedmem || (instr.op.arg0 == ESDI || (instr.op.arg1 == ESDI && instr.op.arg0 != DSSI))) {  /* can't be overridden */
-            warn_at("Segment prefix %s used with opcode 0x%02x %s\n", seg16[(instr.prefix & PREFIX_SEG_MASK)-1], instr.op.opcode, instr.op.name);
-            outp += sprintf(outp, "%s ", seg16[(instr.prefix & PREFIX_SEG_MASK)-1]);
-        }
-    }
-    if ((instr.prefix & PREFIX_OP32) && instr.op.size != 16 && instr.op.size != 32) {
-        warn_at("Operand-size override used with opcode %2X %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, (asm_syntax == GAS) ? "data32 " : "o32 "); /* fixme: how should MASM print it? */
-    }
-    if ((instr.prefix & PREFIX_ADDR32) && (asm_syntax == NASM) && (instr.op.flags & OP_STRING)) {
-        outp += sprintf(outp, "a32 ");
-    } else if ((instr.prefix & PREFIX_ADDR32) && !instr.usedmem && instr.op.opcode != 0xE3) { /* jecxz */
-        warn_at("Address-size prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, (asm_syntax == GAS) ? "addr32 " : "a32 "); /* fixme: how should MASM print it? */
-    }
-    if (instr.prefix & PREFIX_LOCK) {
-        if(!(instr.op.flags & OP_LOCK))
-            warn_at("lock prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, "lock ");
-    }
-    if (instr.prefix & PREFIX_REPNE) {
-        if(!(instr.op.flags & OP_REPNE))
-            warn_at("repne prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, "repne ");
-    }
-    if (instr.prefix & PREFIX_REPE) {
-        if(!(instr.op.flags & OP_REPE))
-            warn_at("repe prefix used with opcode 0x%02x %s\n", instr.op.opcode, instr.op.name);
-        outp += sprintf(outp, (instr.op.flags & OP_REPNE) ? "repe ": "rep ");
-    }
-
-    outp += sprintf(outp, "%s", instr.op.name);
-
-    if (arg0[0] || arg1[0])
-        outp += sprintf(outp,"\t");
-
-    if (asm_syntax == GAS) {
-        /* fixme: are all of these orderings correct? */
-        if (arg1[0])
-            outp += sprintf(outp, "%s,", arg1);
-        if (arg0[0])
-            outp += sprintf(outp, "%s", arg0);
-        if (arg2[0])
-            outp += sprintf(outp, ",%s", arg2);
-    } else {
-        if (arg0[0])
-            outp += sprintf(outp, "%s", arg0);
-        if (arg0[0] && arg1[0])
-            outp += sprintf(outp, ", ");
-        if (arg1[0])
-            outp += sprintf(outp, "%s", arg1);
-        if (arg2[0])
-            outp += sprintf(outp, ", %s", arg2);
-    }
-    if (comment) {
-        outp += sprintf(outp, asm_syntax == GAS ? "\t// " : "\t;");
-        outp += sprintf(outp, " <%s>", comment);
-    }
-
-    /* if we have more than 7 bytes on this line, wrap around */
-    if (len > 7 && !(opts & NO_SHOW_RAW_INSN)) {
-        if (asm_syntax == GAS)
-            outp += sprintf(outp, "\n%4d.%04x:\t", cs, ip+7);
-        else
-            outp += sprintf(outp, "\n\t\t");
-        for (i=7; i<len; i++) {
-            outp += sprintf(outp, "%02x ", p[i]);
-        }
-        outp--; /* trailing space */
-    }
+    print_instr(out, ip_string, p, len, seg->instr_flags[ip], &instr, arg0, arg1, comment);
 
     return len;
 };
@@ -302,7 +172,6 @@ static void print_disassembly(const segment *seg) {
 
     byte buffer[MAX_INSTR];
     char out[256];
-    int is32 = (seg->flags & 0x2000);
 
     while (ip < seg->length) {
         fseek(f, seg->start+ip, SEEK_SET);
@@ -341,7 +210,7 @@ static void print_disassembly(const segment *seg) {
              * because of "push cs", and they should be evident anyway. */
         }
 
-        ip += print_instr(cs, ip, seg->instr_flags, buffer, out, seg->reloc_table, seg->reloc_count, is32);
+        ip += print_ne_instr(seg, ip, buffer, out);
         printf("%s\n", out);
     }
 }
@@ -578,7 +447,7 @@ static void free_reloc(reloc *reloc_data, word reloc_count) {
     free(reloc_data);
 }
 
-void print_ne_segments(word count, word align, word entry_cs, word entry_ip) {
+void print_segments(word count, word align, word entry_cs, word entry_ip) {
     unsigned i, seg;
 
     segments = malloc(count * sizeof(segment));
@@ -602,7 +471,6 @@ void print_ne_segments(word count, word align, word entry_cs, word entry_ip) {
             segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(reloc));
 
             for (i = 0; i < segments[seg].reloc_count; i++) {
-                int o;
                 fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);
                 read_reloc(&segments[seg], &segments[seg].reloc_table[i]);
             }

@@ -609,7 +609,7 @@ void dumpne(long offset_ne)
 
     if (mode & DISASSEMBLE){
         fseek(f, offset_ne + header.ne_segtab, SEEK_SET);
-        print_ne_segments(header.ne_cseg, header.ne_align, header.ne_cs, header.ne_ip);
+        print_segments(header.ne_cseg, header.ne_align, header.ne_cs, header.ne_ip);
     }
 
     if (mode & DUMPRSRC){
