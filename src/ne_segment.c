@@ -16,7 +16,7 @@
 #define warn_at(...)
 #endif
 
-typedef struct {
+struct reloc {
     byte size;
     byte type;
     word offset_count;
@@ -24,21 +24,21 @@ typedef struct {
     word target_segment;
     word target_offset;
     char *text;
-} reloc;
+};
 
-typedef struct {
+struct segment {
     word cs;
     long start;
     word length;
     word flags;
     word min_alloc;
     byte *instr_flags;
-    reloc *reloc_table;
+    struct reloc *reloc_table;
     word reloc_count;
-} segment;
+};
 
 /* global segment list */
-static segment *segments;
+static struct segment *segments;
 
 /* index_function */
 static char *get_entry_name(word cs, word ip) {
@@ -52,7 +52,7 @@ static char *get_entry_name(word cs, word ip) {
 }
 
 /* index function */
-static const reloc *get_reloc(word cs, word ip, const reloc *reloc_data, word reloc_count) {
+static const struct reloc *get_reloc(word cs, word ip, const struct reloc *reloc_data, word reloc_count) {
     unsigned i, o;
     for (i=0; i<reloc_count; i++) {
         for (o=0; o<reloc_data[i].offset_count; o++)
@@ -74,9 +74,9 @@ static char *get_imported_name(word module, word ordinal) {
 }
 
 /* Returns the number of bytes processed (same as get_instr). */
-static int print_ne_instr(const segment *seg, word ip, byte *p, char *out) {
+static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out) {
     word cs = seg->cs;
-    instr_info instr = {0};
+    struct instr instr = {0};
     char arg0[32] = "", arg1[32] = "";
     unsigned len;
 
@@ -95,7 +95,7 @@ static int print_ne_instr(const segment *seg, word ip, byte *p, char *out) {
      * be one relocation per instruction anyway so don't bother. */
     for (i = ip; i < ip+len; i++) {
         if (seg->instr_flags[i] & INSTR_RELOC) {
-            const reloc *r = get_reloc(seg->cs, i, seg->reloc_table, seg->reloc_count);
+            const struct reloc *r = get_reloc(seg->cs, i, seg->reloc_table, seg->reloc_count);
             if (!r) break;
             char *module;
             if (r->type == 1 || r->type == 2)
@@ -166,7 +166,7 @@ static int print_ne_instr(const segment *seg, word ip, byte *p, char *out) {
     return len;
 };
 
-static void print_disassembly(const segment *seg) {
+static void print_disassembly(const struct segment *seg) {
     const word cs = seg->cs;
     word ip = 0;
 
@@ -216,10 +216,10 @@ static void print_disassembly(const segment *seg) {
 }
 
 static void scan_segment(word cs, word ip) {
-    segment *seg = &segments[cs-1];
+    struct segment *seg = &segments[cs-1];
 
     byte buffer[MAX_INSTR];
-    instr_info instr;
+    struct instr instr;
     int instr_length;
     int i;
 
@@ -254,8 +254,8 @@ static void scan_segment(word cs, word ip) {
         if (instr.op.arg0 == PTR32) {
             for (i = ip; i < ip+instr_length; i++) {
                 if (seg->instr_flags[i] & INSTR_RELOC) {
-                    const reloc *r = get_reloc(cs, i, seg->reloc_table, seg->reloc_count);
-                    segment *tseg;
+                    const struct reloc *r = get_reloc(cs, i, seg->reloc_table, seg->reloc_count);
+                    const struct segment *tseg;
 
                     if (!r) break;
                     tseg = &segments[r->target_segment-1];
@@ -344,7 +344,7 @@ static void print_segment_flags(word flags) {
     printf("    Flags: 0x%04x (%s)\n", flags, buffer);
 }
 
-static void read_reloc(segment *seg, reloc *r) {
+static void read_reloc(const struct segment *seg, struct reloc *r) {
     byte size = read_byte();
     byte type = read_byte();
     word offset = read_word();
@@ -438,7 +438,7 @@ static void read_reloc(segment *seg, reloc *r) {
     } while (next < 0xFFFb);
 }
 
-static void free_reloc(reloc *reloc_data, word reloc_count) {
+static void free_reloc(struct reloc *reloc_data, word reloc_count) {
     int i;
     for (i = 0; i < reloc_count; i++) {
         free(reloc_data[i].offsets);
@@ -450,7 +450,7 @@ static void free_reloc(reloc *reloc_data, word reloc_count) {
 void print_segments(word count, word align, word entry_cs, word entry_ip) {
     unsigned i, seg;
 
-    segments = malloc(count * sizeof(segment));
+    segments = malloc(count * sizeof(struct segment));
 
     for (seg = 0; seg < count; seg++) {
         segments[seg].cs = seg+1;
@@ -468,7 +468,7 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
         if (segments[seg].flags & 0x0100) {
             fseek(f, segments[seg].start + segments[seg].length, SEEK_SET);
             segments[seg].reloc_count = read_word();
-            segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(reloc));
+            segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(struct reloc));
 
             for (i = 0; i < segments[seg].reloc_count; i++) {
                 fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);

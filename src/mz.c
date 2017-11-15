@@ -50,7 +50,7 @@ static void print_header(struct header_mz *header) {
 #endif
 
 static int print_mz_instr(dword ip, byte *p, char *out, const byte *flags) {
-    instr_info instr = {0};
+    struct instr instr = {0};
     char arg0[32] = {0}, arg1[32] = {0};
     unsigned len;
 
@@ -115,7 +115,7 @@ static void print_code(dword start, dword length, byte *flags) {
 
 static void scan_segment(dword ip, dword start, dword length, byte *flags) {
     byte buffer[MAX_INSTR];
-    instr_info instr;
+    struct instr instr;
     int instr_length;
     int i;
 

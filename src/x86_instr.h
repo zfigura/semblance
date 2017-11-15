@@ -64,7 +64,7 @@ enum arg {
 #define OP_BRANCH       0x8000  /* branch to target (jmp, jXX) */
 /* -t doesn't need to be marked */
 
-typedef struct {
+struct op {
     word opcode;
     byte subcode;
     byte size;  /* one of: 8, 16, 32, 64, 80, or 0 if not sized */
@@ -73,7 +73,7 @@ typedef struct {
     enum arg arg1; /* usually src */
     /* arg2 only for imul, shrd, shld */
     dword flags;
-} op_info;
+};
 
 #define PREFIX_ES       0x0001  /* 26 */
 #define PREFIX_CS       0x0002  /* 2E */
@@ -99,9 +99,9 @@ enum disptype {
 
 extern const char seg16[6][3];
 
-typedef struct {
+struct instr {
     word prefix;
-    op_info op;
+    struct op op;
     dword arg0;
     dword arg1;
     dword arg2;
@@ -111,10 +111,10 @@ typedef struct {
     byte sib_scale;
     byte sib_index;
     int usedmem:1;  /* used for error checking */
-} instr_info;
+};
 
-extern int get_instr(word ip, const byte *p, instr_info *instr, int is32);
-extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, instr_info *instr, char *arg0, char *arg1, char *comment);
+extern int get_instr(word ip, const byte *p, struct instr *instr, int is32);
+extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, char *arg0, char *arg1, char *comment);
 
 /* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
 #define MAX_INSTR       16

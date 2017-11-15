@@ -28,6 +28,6 @@ unsigned entry_count;
 import_module *import_module_table;
 
 extern void print_rsrc(long start); /* in ne_resource.c */
-extern void print_ne_segments(word count, word align, word entry_cs, word entry_ip); /* in ne_segment.c */
+extern void print_segments(word count, word align, word entry_cs, word entry_ip); /* in ne_segment.c */
 
 #endif /* __NE_H */

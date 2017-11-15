@@ -3,7 +3,7 @@
 #include <string.h>
 #include "x86_instr.h"
 
-static const op_info instructions[256] = {
+static const struct op instructions[256] = {
     {0x00, 8,  8, "add",        RM,     REG,    OP_LOCK},
     {0x01, 8, 16, "add",        RM,     REG,    OP_LOCK},
     {0x02, 8,  8, "add",        REG,    RM},
@@ -262,7 +262,7 @@ static const op_info instructions[256] = {
     {0xFF, 8},  /* group #5 */
 };
 
-static const op_info instructions_group[] = {
+static const struct op instructions_group[] = {
     {0x80, 0,  8, "add",        RM,     IMM,    OP_LOCK},
     {0x80, 1,  8, "or",         RM,     IMM,    OP_LOCK},
     {0x80, 2,  8, "adc",        RM,     IMM,    OP_LOCK},
@@ -381,7 +381,7 @@ static const op_info instructions_group[] = {
 
 /* a subcode value of 8 means all subcodes,
  * or the subcode marks the register if there is one present. */
-static const op_info instructions_0F[] = {
+static const struct op instructions_0F[] = {
     {0x00, 0, 16, "sldt",       RM,     0,      OP_OP32_REGONLY},       /* todo: implement this flag */
     {0x00, 1, 16, "str",        RM,     0,      OP_OP32_REGONLY},
     {0x00, 2,  0, "lldt",       RM},
@@ -493,7 +493,7 @@ static const op_info instructions_0F[] = {
 };
 
 /* mod < 3 (instructions with memory args) */
-static const op_info instructions_fpu_m[64] = {
+static const struct op instructions_fpu_m[64] = {
     {0xD8, 0, 32, "fadd",       MEM,    0,      OP_S},
     {0xD8, 1, 32, "fmul",       MEM,    0,      OP_S},
     {0xD8, 2, 32, "fcom",       MEM,    0,      OP_S},
@@ -560,7 +560,7 @@ static const op_info instructions_fpu_m[64] = {
     {0xDF, 7, 64, "fistp",      MEM,    0,      OP_LL},
 };
 
-static const op_info instructions_fpu_r[64] = {
+static const struct op instructions_fpu_r[64] = {
     {0xD8, 0,  0, "fadd",       ST,     STX},
     {0xD8, 1,  0, "fmul",       ST,     STX},
     {0xD8, 2,  0, "fcom",       STX,    0},
@@ -627,7 +627,7 @@ static const op_info instructions_fpu_r[64] = {
     {0xDF, 7,  0, {0},          0,      0},
 };
 
-static const op_info instructions_fpu_single[] = {
+static const struct op instructions_fpu_single[] = {
     {0xD9, 0xD0, 0, "fnop"},
     {0xD9, 0xE0, 0, "fchs"},
     {0xD9, 0xE1, 0, "fabs"},
@@ -693,7 +693,7 @@ static word get_prefix(byte opcode) {
  * argtype - [i] type of argument being processed
  * instr   - [i/o] pointer to the relevant instr_info
  *      ->prefix     [i]
- *      ->op_info    [i]
+ *      ->op         [i]
  *      ->modrm_disp [o]
  *      ->modrm_reg  [o]
  * is32    - [i] bitness—REL16 and MOFFS16 are affected by bitness but can't be overridden
@@ -703,7 +703,7 @@ static word get_prefix(byte opcode) {
  * Does not process specific arguments (e.g. registers, DSBX, ONE...)
  * The parameter out is given as a dword but may require additional casting.
  */
-static int get_arg(word ip, const byte *p, dword *value, enum arg argtype, instr_info *instr, int is32) {
+static int get_arg(word ip, const byte *p, dword *value, enum arg argtype, struct instr *instr, int is32) {
     *value = 0;
 
     switch (argtype) {
@@ -873,7 +873,7 @@ static const char modrm16_masm[8][6] = {
  * argtype - [i] type of argument being processed
  * instr   - [i] pointer to the relevant instr_info
  */
-static void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_info *instr) {
+static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct instr *instr) {
     *out = '\0';
 
     if (argtype >= AL && argtype <= BH)
@@ -1184,7 +1184,7 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, instr_
     }
 }
 
-static int get_fpu_instr(const byte *p, op_info *op) {
+static int get_fpu_instr(const byte *p, struct op *op) {
     byte opcode = *p;
     byte nextcode = *(p+1);
     byte subcode = (nextcode >> 3) & 7;
@@ -1201,7 +1201,7 @@ static int get_fpu_instr(const byte *p, op_info *op) {
             return 0;
         } else {
             /* try the single op list */
-            for (i=0; i<sizeof(instructions_fpu_single)/sizeof(op_info); i++) {
+            for (i=0; i<sizeof(instructions_fpu_single)/sizeof(*op); i++) {
                 if (opcode == instructions_fpu_single[i].opcode &&
                     nextcode == instructions_fpu_single[i].subcode) {
                     *op = instructions_fpu_single[i];
@@ -1222,16 +1222,16 @@ static int get_fpu_instr(const byte *p, op_info *op) {
  * Returns: number of bytes processed
  *
  * Note: we don't print warnings here (all warnings should be printed
- * while actually dumping output, both to keep this file agnostic and to
- * ensure they only get printed once), so you will need to watch out for
+ * while actually dumping output, both to keep this function agnostic and to
+ * ensure they only get printed once), so we will need to watch out for
  * multiple prefixes, invalid instructions, etc.
  */
-int get_instr(word ip, const byte *p, instr_info *instr, int is32) {
+int get_instr(word ip, const byte *p, struct instr *instr, int is32) {
     int len = 0;
     byte opcode;
     word prefix;
 
-    memset(instr, 0, sizeof(instr_info));
+    memset(instr, 0, sizeof(*instr));
 
     /* first iterate through prefixes until we find a real opcode */
     while ((prefix = get_prefix(p[len]))) {
@@ -1259,7 +1259,7 @@ int get_instr(word ip, const byte *p, instr_info *instr, int is32) {
             len++;
             opcode = p[len];
             subcode = (p[len+1] >> 3) & 7;
-            for (i=0; i<sizeof(instructions_0F)/sizeof(op_info); i++) {
+            for (i=0; i<sizeof(instructions_0F)/sizeof(struct op); i++) {
                 if (opcode == instructions_0F[i].opcode &&
                     (instructions_0F[i].subcode == 8 ||
                      instructions_0F[i].subcode == subcode)) {
@@ -1272,7 +1272,7 @@ int get_instr(word ip, const byte *p, instr_info *instr, int is32) {
             len += get_fpu_instr(p+len, &instr->op);
         } else {
             unsigned i;
-            for (i=0; i<sizeof(instructions_group)/sizeof(op_info); i++) {
+            for (i=0; i<sizeof(instructions_group)/sizeof(struct op); i++) {
                 if (opcode == instructions_group[i].opcode &&
                     subcode == instructions_group[i].subcode) {
                     instr->op = instructions_group[i];
@@ -1299,7 +1299,7 @@ int get_instr(word ip, const byte *p, instr_info *instr, int is32) {
 
     /* resolve the size */
     if (instr->prefix & PREFIX_OP32)
-        instr->op.size = is32 ? 16 : 32;        /* yes, change it anyway */
+        instr->op.size = is32 ? 16 : 32;
     else if (instr->op.size == 16)
         instr->op.size = is32 ? 32 : 16;
 
@@ -1390,7 +1390,7 @@ int get_instr(word ip, const byte *p, instr_info *instr, int is32) {
     return len;
 }
 
-void print_instr(char *out, char *ip, byte *p, int len, byte flags, instr_info *instr, char *arg0, char *arg1, char *comment) {
+void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, char *arg0, char *arg1, char *comment) {
     char arg2[32] = "";
     int i;
 
