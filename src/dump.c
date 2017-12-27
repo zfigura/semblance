@@ -45,8 +45,10 @@ static const char help_message[] =
 "\t-c, --compilable                     Produce output that can be compiled.\n"
 "\t-C, --demangle                       Demangle C++ function names.\n"
 "\t-d, --disassemble                    Print disassembled machine code.\n"
+"\t-e, --exports                        Print exported functions.\n"
 "\t-f, --file-headers                   Print contents of the file header.\n"
 "\t-h, --help                           Display this help message.\n"
+"\t-i, --imports                        Print imported modules.\n"
 "\t-M, --disassembler-options=[...]     Extended options for disassembly.\n"
 "\t\tatt        Alias for `gas'.\n"
 "\t\tgas        Use GAS syntax for disassembly.\n"
@@ -54,8 +56,9 @@ static const char help_message[] =
 "\t\tmasm       Use MASM syntax for disassembly.\n"
 "\t\tnasm       Use NASM syntax for disassembly.\n"
 "\t-o, --specfile                       Create a specfile from exports.\n"
-"\t-s, --full-contents                  Display all information (default).\n"
+"\t-s, --full-contents                  Display full contents of all sections.\n"
 "\t-v, --version                        Print the version number of dumpne.\n"
+"\t-x, --all-headers                    Print all headers.\n"
 "\t--no-show-addresses                  Don't print instruction addresses.\n"
 "\t--no-show-raw-insn                   Don't print raw instruction hex code.\n"
 ;
@@ -75,7 +78,7 @@ static const struct option long_options[] = {
     {"disassembler-options",    required_argument,  NULL, 'M'},
 //  {"nasm",                    no_argument,        NULL, 'N'},
     {"specfile",                no_argument,        NULL, 'o'},
-//    {"full-contents",           no_argument,        NULL, 's'},
+    {"full-contents",           no_argument,        NULL, 's'},
     {"version",                 no_argument,        NULL, 'v'},
     {"all-headers",             no_argument,        NULL, 'x'},
     {"no-show-raw-insn",        no_argument,        NULL, NO_SHOW_RAW_INSN},
@@ -90,7 +93,7 @@ int main(int argc, char *argv[]){
     opts = 0;
     asm_syntax = NASM;
 
-    while ((opt = getopt_long(argc, argv, "a::cCdDefhiM:ovx", long_options, NULL)) >= 0){
+    while ((opt = getopt_long(argc, argv, "a::cCdDefhiM:osvx", long_options, NULL)) >= 0){
         switch (opt) {
         case NO_SHOW_RAW_INSN:
             opts |= NO_SHOW_RAW_INSN;
@@ -176,6 +179,9 @@ int main(int argc, char *argv[]){
             break;
         case 'v': /* version */
             printf("dump version 1.0\n");
+        case 's': /* full contents */
+            opts |= FULL_CONTENTS;
+            break;
         case 'x': /* all headers */
             mode |= DUMPHEADER | DUMPEXPORT | DUMPIMPORTMOD;
         default: /* '?' */

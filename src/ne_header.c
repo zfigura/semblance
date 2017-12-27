@@ -168,6 +168,7 @@ static void print_export(entry *entry_table, int count) {
         else if (entry_table[i].segment)
             printf("\t%5d\t%2d:%04x\t%s\n", i+1, entry_table[i].segment,
                 entry_table[i].offset, entry_table[i].name ? entry_table[i].name : "<no name>");
+    putchar('\n');
 }
 
 static void print_specfile(char *module_name, entry *entry_table, int count) {
@@ -605,6 +606,7 @@ void dumpne(long offset_ne)
         printf("Imported modules:\n");
         for (i = 0; i < header.ne_cmod; i++)
             printf("\t%s\n", import_module_table[i].name);
+        putchar('\n');
     }
 
     if (mode & DISASSEMBLE){

@@ -213,6 +213,7 @@ static void print_disassembly(const struct segment *seg) {
         ip += print_ne_instr(seg, ip, buffer, out);
         printf("%s\n", out);
     }
+    putchar('\n');
 }
 
 static void print_data(const struct segment *seg) {
@@ -242,6 +243,7 @@ static void print_data(const struct segment *seg) {
         }
         putchar('\n');
     }
+    putchar('\n');
 }
 
 static void scan_segment(word cs, word ip) {
@@ -553,6 +555,9 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
             /* FIXME #2: Data segments can still have relocations... */
             print_data(&segments[seg]);
         } else {
+            /* like objdump, print the whole code segment like a data segment */
+            if (opts & FULL_CONTENTS)
+                print_data(&segments[seg]);
             print_disassembly(&segments[seg]);
         }
 

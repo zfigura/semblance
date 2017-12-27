@@ -56,6 +56,7 @@ word mode; /* what to dump */
 #define NO_SHOW_RAW_INSN    0x04
 #define NO_SHOW_ADDRESSES   0x08
 #define COMPILABLE          0x10
+#define FULL_CONTENTS       0x20
 word opts; /* additional options */
 
 #define MAXARGS		256
