@@ -5,7 +5,7 @@
 
 static void dump_file(char *file){
     word magic;
-    long offset_ne = 0;
+    long offset = 0;
 
     fprintf(stderr, "%s\n", file);
 
@@ -19,14 +19,14 @@ static void dump_file(char *file){
 
     if (magic == 0x5a4d){ /* MZ */
         fseek(f, 0x3c, SEEK_SET);
-        offset_ne = read_dword();
-        fseek(f, offset_ne, SEEK_SET);
+        offset = read_dword();
+        fseek(f, offset, SEEK_SET);
         magic = read_word();
 
         if (magic == 0x4550)
-            fprintf(stderr, "PE support not yet implemented\n");
+            dumppe(offset);
         else if (magic == 0x454e)
-            dumpne(offset_ne);
+            dumpne(offset);
         else
             dumpmz();
     } else

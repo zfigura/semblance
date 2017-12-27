@@ -74,7 +74,8 @@ extern word resource_id[MAXARGS];
 extern word resource_count;
 
 /* Entry points */
-void dumpne(long offset_ne);
 void dumpmz(void);
+void dumpne(long offset_ne);
+void dumppe(long offset_pe);
 
 #endif /* SEMBLANCE_H */
