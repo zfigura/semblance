@@ -215,6 +215,35 @@ static void print_disassembly(const struct segment *seg) {
     }
 }
 
+static void print_data(const struct segment *seg) {
+    word ip;    /* well, not really ip */
+
+    for (ip = 0; ip < seg->length; ip += 16) {
+        byte row[16];
+        int len = (seg->length-ip >= 16) ? 16 : (seg->length-ip);
+        int i;
+
+        fseek(f, seg->start+ip, SEEK_SET);
+        fread(row, sizeof(byte), len, f);
+
+        printf("%3d:%04x", seg->cs, ip);
+        for (i=0; i<16; i++) {
+            if (i < len)
+                printf(" %02x", row[i]);
+            else
+                printf("   ");
+        }
+        printf("  ");
+        for (i=0; i<len; i++){
+                if ((row[i] >= ' ') && (row[i] <= '~'))
+                    putchar(row[i]);
+                else
+                    putchar('.');
+        }
+        putchar('\n');
+    }
+}
+
 static void scan_segment(word cs, word ip) {
     struct segment *seg = &segments[cs-1];
 
@@ -520,7 +549,9 @@ void print_segments(word count, word align, word entry_cs, word entry_ip) {
         print_segment_flags(segments[seg].flags);
 
         if (segments[seg].flags & 0x0001) {
-            /* todo */
+            /* FIXME: We should at least make a special note of entry points. */
+            /* FIXME #2: Data segments can still have relocations... */
+            print_data(&segments[seg]);
         } else {
             print_disassembly(&segments[seg]);
         }
