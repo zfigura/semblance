@@ -66,15 +66,18 @@ static const struct option long_options[] = {
     {"demangle",                no_argument,        NULL, 'C'},
     {"disassemble",             no_argument,        NULL, 'd'},
     {"disassemble-all",         no_argument,        NULL, 'D'},
+    {"exports",                 no_argument,        NULL, 'e'},
     {"file-headers",            no_argument,        NULL, 'f'},
 //  {"gas",                     no_argument,        NULL, 'G'},
     {"help",                    no_argument,        NULL, 'h'},
+    {"imports",                 no_argument,        NULL, 'i'},
 //  {"masm",                    no_argument,        NULL, 'I'}, /* for "Intel" */
     {"disassembler-options",    required_argument,  NULL, 'M'},
 //  {"nasm",                    no_argument,        NULL, 'N'},
     {"specfile",                no_argument,        NULL, 'o'},
-    {"full-contents",           no_argument,        NULL, 's'},
+//    {"full-contents",           no_argument,        NULL, 's'},
     {"version",                 no_argument,        NULL, 'v'},
+    {"all-headers",             no_argument,        NULL, 'x'},
     {"no-show-raw-insn",        no_argument,        NULL, NO_SHOW_RAW_INSN},
     {"no-prefix-addresses",     no_argument,        NULL, NO_SHOW_ADDRESSES},
     {0}
@@ -87,7 +90,7 @@ int main(int argc, char *argv[]){
     opts = 0;
     asm_syntax = NASM;
 
-    while ((opt = getopt_long(argc, argv, "a::cCdDfhM:osv", long_options, NULL)) >= 0){
+    while ((opt = getopt_long(argc, argv, "a::cCdDefhiM:ovx", long_options, NULL)) >= 0){
         switch (opt) {
         case NO_SHOW_RAW_INSN:
             opts |= NO_SHOW_RAW_INSN;
@@ -143,12 +146,19 @@ int main(int argc, char *argv[]){
         case 'D': /* disassemble all */
             opts |= DISASSEMBLE_ALL;
             break;
+        case 'e': /* exports */
+            opts |= DUMPEXPORT;
+            break;
         case 'f': /* dump header only */
             mode |= DUMPHEADER;
             break;
         case 'h': /* help */
             printf(help_message);
             return 0;
+        case 'i': /* imports */
+            /* FIXME: should also list imported functions (?) */
+            opts |= DUMPIMPORTMOD;
+            break;
         case 'M': /* additional options */
             if (!strcmp(optarg, "att") || !strcmp(optarg, "gas"))
                 asm_syntax = GAS;
@@ -164,11 +174,10 @@ int main(int argc, char *argv[]){
         case 'o': /* make a specfile */
             mode = SPECFILE;
             break;
-        case 's': /* dump everything */
-            mode |= DUMPHEADER | DUMPRSRC | DISASSEMBLE;
-            break;
         case 'v': /* version */
             printf("dump version 1.0\n");
+        case 'x': /* all headers */
+            mode |= DUMPHEADER | DUMPEXPORT | DUMPIMPORTMOD;
         default: /* '?' */
             fprintf(stderr, "Usage: dumpne [options] <file>\n");
             return 1;
@@ -179,7 +188,7 @@ int main(int argc, char *argv[]){
         mode = ~0;
 
     if (optind == argc)
-        printf("No input given\n");
+        printf(help_message);
 
     while (optind < argc){
         dump_file(argv[optind++]);
