@@ -150,7 +150,7 @@ int main(int argc, char *argv[]){
             opts |= DISASSEMBLE_ALL;
             break;
         case 'e': /* exports */
-            opts |= DUMPEXPORT;
+            mode |= DUMPEXPORT;
             break;
         case 'f': /* dump header only */
             mode |= DUMPHEADER;
@@ -160,7 +160,7 @@ int main(int argc, char *argv[]){
             return 0;
         case 'i': /* imports */
             /* FIXME: should also list imported functions (?) */
-            opts |= DUMPIMPORTMOD;
+            mode |= DUMPIMPORTMOD;
             break;
         case 'M': /* additional options */
             if (!strcmp(optarg, "att") || !strcmp(optarg, "gas"))
