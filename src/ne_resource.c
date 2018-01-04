@@ -316,54 +316,36 @@ static void print_rsrc_control_style(byte class, dword flags){
     case 0x80: /* Button */
         strcpy(buffer, rsrc_button_type[flags & 0x000f]);
         
-        if (flags & 0x0010)
-            strcat(buffer, ", (unknown flag 0x0010)");
-        if (flags & 0x0020)
-            strcat(buffer, ", BS_LEFTTEXT");
+        if (flags & 0x0010) strcat(buffer, ", (unknown flag 0x0010)");
+        if (flags & 0x0020) strcat(buffer, ", BS_LEFTTEXT");
 
         if ((flags & 0x0040) == 0)
             strcat(buffer, ", BS_TEXT");
         else {
-            if (flags & 0x0040)
-                strcat(buffer, "BS_ICON");
-            if (flags & 0x0080)
-                strcat(buffer, "BS_BITMAP");
+            if (flags & 0x0040) strcat(buffer, ", BS_ICON");
+            if (flags & 0x0080) strcat(buffer, ", BS_BITMAP");
         }
 
-        if ((flags & 0x0300) == 0x0100)
-            strcat(buffer, ", BS_LEFT");
-        else if ((flags & 0x0300) == 0x0200)
-            strcat(buffer, ", BS_RIGHT");
-        else if ((flags & 0x0300) == 0x0300)
-            strcat(buffer, ", BS_CENTER");
+        if      ((flags & 0x0300) == 0x0100) strcat(buffer, ", BS_LEFT");
+        else if ((flags & 0x0300) == 0x0200) strcat(buffer, ", BS_RIGHT");
+        else if ((flags & 0x0300) == 0x0300) strcat(buffer, ", BS_CENTER");
 
-        if ((flags & 0x0C00) == 0x0400)
-            strcat(buffer, ", BS_TOP");
-        else if ((flags & 0x0C00) == 0x0800)
-            strcat(buffer, ", BS_BOTTOM");
-        else if ((flags & 0x0C00) == 0x0C00)
-            strcat(buffer, ", BS_VCENTER");
+        if      ((flags & 0x0C00) == 0x0400) strcat(buffer, ", BS_TOP");
+        else if ((flags & 0x0C00) == 0x0800) strcat(buffer, ", BS_BOTTOM");
+        else if ((flags & 0x0C00) == 0x0C00) strcat(buffer, ", BS_VCENTER");
 
-        if (flags & 0x1000)
-            strcat(buffer, ", BS_PUSHLIKE");
-        if (flags & 0x2000)
-            strcat(buffer, ", BS_MULTILINE");
-        if (flags & 0x4000)
-            strcat(buffer, ", BS_NOTIFY");
-        if (flags & 0x8000)
-            strcat(buffer, ", BS_FLAT");
+        if (flags & 0x1000) strcat(buffer, ", BS_PUSHLIKE");
+        if (flags & 0x2000) strcat(buffer, ", BS_MULTILINE");
+        if (flags & 0x4000) strcat(buffer, ", BS_NOTIFY");
+        if (flags & 0x8000) strcat(buffer, ", BS_FLAT");
 
         break;
-        
+
     case 0x81: /* Edit */
-        if ((flags & 3) == 0)
-            strcpy(buffer, "ES_LEFT");
-        else if ((flags & 3) == 1)
-            strcpy(buffer, "ES_CENTER");
-        else if ((flags & 3) == 2)
-            strcpy(buffer, "ES_RIGHT");
-        else if ((flags & 3) == 3)
-            strcpy(buffer, "(unknown type 3)");
+        if      ((flags & 3) == 0) strcpy(buffer, "ES_LEFT");
+        else if ((flags & 3) == 1) strcpy(buffer, "ES_CENTER");
+        else if ((flags & 3) == 2) strcpy(buffer, "ES_RIGHT");
+        else if ((flags & 3) == 3) strcpy(buffer, "(unknown type 3)");
 
         for (i=2; i<16; i++){
             if (flags & (1<<i)){
@@ -496,20 +478,13 @@ static void print_rsrc_menu_items(int depth) {
 
         /* and print flags */
         buffer[0] = '\0';
-        if (flags & 0x0001)
-            strcat(buffer, ", grayed");
-        if (flags & 0x0002)
-            strcat(buffer, ", inactive");
-        if (flags & 0x0004)
-            strcat(buffer, ", bitmap");
-        if (flags & 0x0008)
-            strcat(buffer, ", checked");
-        if (flags & 0x0010)
-            strcat(buffer, ", popup");
-        if (flags & 0x0020)
-            strcat(buffer, ", menu bar break");
-        if (flags & 0x0040)
-            strcat(buffer, ", menu break");
+        if (flags & 0x0001) strcat(buffer, ", grayed");
+        if (flags & 0x0002) strcat(buffer, ", inactive");
+        if (flags & 0x0004) strcat(buffer, ", bitmap");
+        if (flags & 0x0008) strcat(buffer, ", checked");
+        if (flags & 0x0010) strcat(buffer, ", popup");
+        if (flags & 0x0020) strcat(buffer, ", menu bar break");
+        if (flags & 0x0040) strcat(buffer, ", menu break");
         /* don't print ENDMENU */
         if (flags & 0xff00)
             sprintf(buffer+strlen(buffer), ", unknown flags 0x%04x", flags & 0xff00);
@@ -647,16 +622,11 @@ static void print_rsrc_version_flags(struct version_header header){
         else
             printf("    Subtype: (unknown subtype %d)\n", header.flags_subtype);
     } else if (header.flags_type == 4){ /* font */
-        if (header.flags_subtype == 0)
-            printf("    Subtype: unknown font\n");
-        else if (header.flags_subtype == 1)
-            printf("    Subtype: raster font\n");
-        else if (header.flags_subtype == 2)
-            printf("    Subtype: vector font\n");
-        else if (header.flags_subtype == 3)
-            printf("    Subtype: TrueType font\n");
-        else
-            printf("    Subtype: (unknown subtype %d)\n", header.flags_subtype);
+        if (header.flags_subtype == 0)      printf("    Subtype: unknown font\n");
+        else if (header.flags_subtype == 1) printf("    Subtype: raster font\n");
+        else if (header.flags_subtype == 2) printf("    Subtype: vector font\n");
+        else if (header.flags_subtype == 3) printf("    Subtype: TrueType font\n");
+        else printf("    Subtype: (unknown subtype %d)\n", header.flags_subtype);
     } else if (header.flags_type == 5){ /* VXD */
         printf("    Virtual device ID: %d\n", header.flags_subtype);
     } else if (header.flags_subtype){

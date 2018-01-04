@@ -53,47 +53,26 @@ STATIC_ASSERT(sizeof(struct header_ne) == 0x40);
 static void print_flags(word flags){
     char buffer[1024];
     
-    if ((flags & 0x0003) == 0)
-        strcpy(buffer, "no DGROUP");
-    else if ((flags & 0x0003) == 1)
-        strcpy(buffer, "single DGROUP");
-    else if ((flags & 0x0003) == 2)
-        strcpy(buffer, "multiple DGROUPs");
-    else if ((flags & 0x0003) == 3)
-        strcpy(buffer, "(unknown DGROUP type 3)");
-    if (flags & 0x0004)
-        strcat(buffer, ", global initialization");
-    if (flags & 0x0008)
-        strcat(buffer, ", protected mode only");
-    if (flags & 0x0010)
-        strcat(buffer, ", 8086");
-    if (flags & 0x0020)
-        strcat(buffer, ", 80286");
-    if (flags & 0x0040)
-        strcat(buffer, ", 80386");
-    if (flags & 0x0080)
-        strcat(buffer, ", 80x87");
-    if ((flags & 0x0700) == 0x0100)
-        strcat(buffer, ", fullscreen"); /* FRAMEBUF */
-    else if ((flags & 0x0700) == 0x0200)
-        strcat(buffer, ", console"); /* API compatible */
-    else if ((flags & 0x0700) == 0x0300)
-        strcat(buffer, ", GUI"); /* uses API */
-    else if ((flags & 0x0700) == 0)
-        ; /* none? */
-    else
-        sprintf(buffer+strlen(buffer), ", (unknown application type %d)",
-                (flags & 0x0700) >> 8);
-    if (flags & 0x0800)
-        strcat(buffer, ", self-loading"); /* OS/2 family */
-    if (flags & 0x1000)
-        strcat(buffer, ", (unknown flag 0x1000)");
-    if (flags & 0x2000)
-        strcat(buffer, ", contains linker errors");
-    if (flags & 0x4000)
-        strcat(buffer, ", non-conforming program");
-    if (flags & 0x8000)
-        strcat(buffer, ", library");
+    if      ((flags & 0x0003) == 0) strcpy(buffer, "no DGROUP");
+    else if ((flags & 0x0003) == 1) strcpy(buffer, "single DGROUP");
+    else if ((flags & 0x0003) == 2) strcpy(buffer, "multiple DGROUPs");
+    else if ((flags & 0x0003) == 3) strcpy(buffer, "(unknown DGROUP type 3)");
+    if (flags & 0x0004) strcat(buffer, ", global initialization");
+    if (flags & 0x0008) strcat(buffer, ", protected mode only");
+    if (flags & 0x0010) strcat(buffer, ", 8086");
+    if (flags & 0x0020) strcat(buffer, ", 80286");
+    if (flags & 0x0040) strcat(buffer, ", 80386");
+    if (flags & 0x0080) strcat(buffer, ", 80x87");
+    if      ((flags & 0x0700) == 0x0100) strcat(buffer, ", fullscreen"); /* FRAMEBUF */
+    else if ((flags & 0x0700) == 0x0200) strcat(buffer, ", console"); /* API compatible */
+    else if ((flags & 0x0700) == 0x0300) strcat(buffer, ", GUI"); /* uses API */
+    else if ((flags & 0x0700) == 0)      strcat(buffer, ", (no subsystem)"); /* none? */
+    else sprintf(buffer+strlen(buffer), ", (unknown application type %d)", (flags & 0x0700) >> 8);
+    if (flags & 0x0800) strcat(buffer, ", self-loading"); /* OS/2 family */
+    if (flags & 0x1000) strcat(buffer, ", (unknown flag 0x1000)");
+    if (flags & 0x2000) strcat(buffer, ", contains linker errors");
+    if (flags & 0x4000) strcat(buffer, ", non-conforming program");
+    if (flags & 0x8000) strcat(buffer, ", library");
     
     printf("Flags: 0x%04x (%s)\n", flags, buffer);
 }
@@ -102,14 +81,10 @@ static void print_os2flags(word flags){
     char buffer[1024];
 
     buffer[0] = 0;
-    if (flags & 0x0001)
-        strcat(buffer, ", long filename support");
-    if (flags & 0x0002)
-        strcat(buffer, ", 2.x protected mode");
-    if (flags & 0x0004)
-        strcat(buffer, ", 2.x proportional fonts");
-    if (flags & 0x0008)
-        strcat(buffer, ", fast-load area"); /* gangload */
+    if (flags & 0x0001) strcat(buffer, ", long filename support");
+    if (flags & 0x0002) strcat(buffer, ", 2.x protected mode");
+    if (flags & 0x0004) strcat(buffer, ", 2.x proportional fonts");
+    if (flags & 0x0008) strcat(buffer, ", fast-load area"); /* gangload */
     if (flags & 0xfff0)
         sprintf(buffer+strlen(buffer), ", (unknown flags 0x%04x)", flags & 0xfff0);
 

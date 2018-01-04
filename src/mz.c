@@ -35,12 +35,6 @@ static void print_header(struct header_mz *header) {
     printf("\n");
 }
 
-/* flags relating to specific instructions */
-#define INSTR_SCANNED   0x01    /* byte has been scanned */
-#define INSTR_VALID     0x02    /* byte begins an instruction */
-#define INSTR_JUMP      0x04    /* instruction is jumped to */
-#define INSTR_FUNC      0x08    /* instruction begins a function */
-
 #ifdef USE_WARN
 #define warn_at(...) \
     do { fprintf(stderr, "Warning: %05x: ", ip); \
