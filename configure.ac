@@ -1,7 +1,7 @@
 # Process this file with autoconf to produce a configure script.
 
 # start out
-AC_INIT([semblance], [1.0])
+AC_INIT([semblance], [0.1])
 AC_CONFIG_SRCDIR([src/semblance.h])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
 AC_ARG_ENABLE(warn, AS_HELP_STRING([--disable-warn],[do not print warnings]))

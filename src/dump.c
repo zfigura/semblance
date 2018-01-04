@@ -1,3 +1,25 @@
+/*
+ * Entry point of the "dump" program
+ *
+ * Copyright 2017-2018 Zebediah Figura
+ *
+ * This file is part of Semblance.
+ *
+ * Semblance is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Semblance is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
+ */
+
 #include <string.h>
 #include <getopt.h>
 
@@ -57,7 +79,7 @@ static const char help_message[] =
 "\t\tnasm       Use NASM syntax for disassembly.\n"
 "\t-o, --specfile                       Create a specfile from exports.\n"
 "\t-s, --full-contents                  Display full contents of all sections.\n"
-"\t-v, --version                        Print the version number of dumpne.\n"
+"\t-v, --version                        Print the version number of semblance.\n"
 "\t-x, --all-headers                    Print all headers.\n"
 "\t--no-show-addresses                  Don't print instruction addresses.\n"
 "\t--no-show-raw-insn                   Don't print raw instruction hex code.\n"
@@ -178,7 +200,8 @@ int main(int argc, char *argv[]){
             mode = SPECFILE;
             break;
         case 'v': /* version */
-            printf("dump version 1.0\n");
+            printf("semblance version " VERSION "\n");
+            return 0;
         case 's': /* full contents */
             opts |= FULL_CONTENTS;
             break;
