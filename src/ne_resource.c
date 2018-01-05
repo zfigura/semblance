@@ -1042,6 +1042,10 @@ struct resource {
 
 STATIC_ASSERT(sizeof(struct resource) == 0xc);
 
+word resource_type[MAXARGS] = {0};
+word resource_id[MAXARGS] = {0};
+word resource_count = 0;
+
 void print_rsrc(long start){
     word align = read_word();
     word type_id;

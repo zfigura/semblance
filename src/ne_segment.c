@@ -36,37 +36,13 @@
 #define warn_at(...)
 #endif
 
-struct reloc {
-    byte size;
-    byte type;
-    word offset_count;
-    word *offsets;
-    word target_segment;
-    word target_offset;
-    char *text;
-};
-
-struct segment {
-    word cs;
-    long start;
-    word length;
-    word flags;
-    word min_alloc;
-    byte *instr_flags;
-    struct reloc *reloc_table;
-    word reloc_count;
-};
-
-/* global segment list */
-static struct segment *segments;
-
 /* index_function */
-static char *get_entry_name(word cs, word ip) {
+static char *get_entry_name(word cs, word ip, const struct ne *ne) {
     unsigned i;
-    for (i=0; i<entry_count; i++) {
-        if (entry_table[i].segment == cs &&
-            entry_table[i].offset == ip)
-            return entry_table[i].name;
+    for (i=0; i<ne->entcount; i++) {
+        if (ne->enttab[i].segment == cs &&
+            ne->enttab[i].offset == ip)
+            return ne->enttab[i].name;
     }
     return NULL;
 }
@@ -84,17 +60,17 @@ static const struct reloc *get_reloc(word cs, word ip, const struct reloc *reloc
 }
 
 /* load an imported name from a specfile */
-static char *get_imported_name(word module, word ordinal) {
+static char *get_imported_name(word module, word ordinal, const struct ne *ne) {
     unsigned i;
-    for (i=0; i<import_module_table[module-1].export_count; i++) {
-        if (import_module_table[module-1].exports[i].ordinal == ordinal)
-            return import_module_table[module-1].exports[i].name;
+    for (i=0; i<ne->imptab[module-1].export_count; i++) {
+        if (ne->imptab[module-1].exports[i].ordinal == ordinal)
+            return ne->imptab[module-1].exports[i].name;
     }
     return NULL;
 }
 
 /* Returns the number of bytes processed (same as get_instr). */
-static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out) {
+static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out, const struct ne *ne) {
     word cs = seg->cs;
     struct instr instr = {0};
     char arg0[32] = "", arg1[32] = "";
@@ -119,7 +95,7 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
             if (!r) break;
             char *module;
             if (r->type == 1 || r->type == 2)
-                module = import_module_table[r->target_segment-1].name;
+                module = ne->imptab[r->target_segment-1].name;
 
             if (instr.op.arg0 == PTR32 && r->size == 3) {
                 /* 32-bit relocation on 32-bit pointer, so just copy the name as appropriate */
@@ -128,31 +104,31 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
                     comment = r->text;
                 } else if (r->type == 1) {
                     snprintf(arg0, sizeof(arg0), "%s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset);
+                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
                 } else if (r->type == 2)
-                    snprintf(arg0, sizeof(arg0), "%s.%.*s", module, import_name_table[r->target_offset], &import_name_table[r->target_offset+1]);
+                    snprintf(arg0, sizeof(arg0), "%s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
             } else if (instr.op.arg0 == PTR32 && r->size == 2 && r->type == 0) {
                 /* segment relocation on 32-bit pointer; copy the segment but keep the offset */
                 sprintf(arg0, "%d:%04x", r->target_segment, instr.arg0);
-                comment = get_entry_name(r->target_segment, instr.arg0);
+                comment = get_entry_name(r->target_segment, instr.arg0, ne);
             } else if (instr.op.arg0 == IMM && r->size == 2) {
                 /* imm16 referencing a segment directly */
                 if (r->type == 0)
                     sprintf(arg0, "seg %d", r->target_segment);
                 else if (r->type == 1) {
                     snprintf(arg0, sizeof(arg0), "seg %s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset);
+                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
                 } else if (r->type == 2)
-                    snprintf(arg0, sizeof(arg0), "seg %s.%.*s", module, import_name_table[r->target_offset], &import_name_table[r->target_offset+1]);
+                    snprintf(arg0, sizeof(arg0), "seg %s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
             } else if (instr.op.arg1 == IMM && r->size == 2) {
                 /* same as above wrt arg1 */
                 if (r->type == 0)
                     sprintf(arg1, "seg %d", r->target_segment);
                 else if (r->type == 1) {
                     snprintf(arg1, sizeof(arg1), "seg %s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset);
+                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
                 } else if (r->type == 2)
-                    snprintf(arg1, sizeof(arg1), "seg %s.%.*s", module, import_name_table[r->target_offset], &import_name_table[r->target_offset+1]);
+                    snprintf(arg1, sizeof(arg1), "seg %s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
             } else if (instr.op.arg0 == IMM && r->size == 5) {
                 /* imm16 referencing an offset directly. MASM doesn't have a prefix for this
                  * and I don't personally think it should be necessary either. */
@@ -160,18 +136,18 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
                     sprintf(arg0, "%04x", r->target_offset);
                 else if (r->type == 1) {
                     snprintf(arg0, sizeof(arg0), "%s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset);
+                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
                 } else if (r->type == 2)
-                    snprintf(arg0, sizeof(arg0), "%s.%.*s", module, import_name_table[r->target_offset], &import_name_table[r->target_offset+1]);
+                    snprintf(arg0, sizeof(arg0), "%s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
             } else if (instr.op.arg1 == IMM && r->size == 5) {
                 /* same as above wrt arg1 */
                 if (r->type == 0)
                     sprintf(arg1, "%04x", r->target_offset);
                 else if (r->type == 1) {
                     snprintf(arg1, sizeof(arg1), "%s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset);
+                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
                 } else if (r->type == 2)
-                    snprintf(arg1, sizeof(arg1), "%s.%.*s", module, import_name_table[r->target_offset], &import_name_table[r->target_offset+1]);
+                    snprintf(arg1, sizeof(arg1), "%s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
             } else
                 warn_at("unhandled relocation: size %d, type %d, instruction %02x %s\n", r->size, r->type, instr.op.opcode, instr.op.name);
         }
@@ -179,14 +155,14 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
 
     /* check if we are referencing a named export */
     if (instr.op.arg0 == REL16 && !comment)
-        comment = get_entry_name(cs, instr.arg0);
+        comment = get_entry_name(cs, instr.arg0, ne);
 
     print_instr(out, ip_string, p, len, seg->instr_flags[ip], &instr, arg0, arg1, comment);
 
     return len;
 };
 
-static void print_disassembly(const struct segment *seg) {
+static void print_disassembly(const struct segment *seg, const struct ne *ne) {
     const word cs = seg->cs;
     word ip = 0;
 
@@ -223,14 +199,14 @@ static void print_disassembly(const struct segment *seg) {
             fread(buffer, 1, sizeof(buffer), f);
 
         if (seg->instr_flags[ip] & INSTR_FUNC) {
-            char *name = get_entry_name(cs, ip);
+            char *name = get_entry_name(cs, ip, ne);
             printf("\n");
             printf("%d:%04x <%s>:\n", cs, ip, name ? name : "no name");
             /* don't mark far functions—we can't reliably detect them
              * because of "push cs", and they should be evident anyway. */
         }
 
-        ip += print_ne_instr(seg, ip, buffer, out);
+        ip += print_ne_instr(seg, ip, buffer, out, ne);
         printf("%s\n", out);
     }
     putchar('\n');
@@ -266,8 +242,8 @@ static void print_data(const struct segment *seg) {
     putchar('\n');
 }
 
-static void scan_segment(word cs, word ip) {
-    struct segment *seg = &segments[cs-1];
+static void scan_segment(word cs, word ip, struct ne *ne) {
+    struct segment *seg = &ne->segments[cs-1];
 
     byte buffer[MAX_INSTR];
     struct instr instr;
@@ -309,7 +285,7 @@ static void scan_segment(word cs, word ip) {
                     const struct segment *tseg;
 
                     if (!r) break;
-                    tseg = &segments[r->target_segment-1];
+                    tseg = &ne->segments[r->target_segment-1];
 
                     if (r->type != 0) break;
 
@@ -320,7 +296,7 @@ static void scan_segment(word cs, word ip) {
                             tseg->instr_flags[r->target_offset] |= INSTR_FUNC;
                         else
                             tseg->instr_flags[r->target_offset] |= INSTR_JUMP;
-                        scan_segment(r->target_segment, r->target_offset);
+                        scan_segment(r->target_segment, r->target_offset, ne);
                     } else if (r->size == 2) {
                         /* segment relocation on 32-bit pointer */
                         tseg->instr_flags[instr.arg0] |= INSTR_FAR;
@@ -328,7 +304,7 @@ static void scan_segment(word cs, word ip) {
                             tseg->instr_flags[instr.arg0] |= INSTR_FUNC;
                         else
                             tseg->instr_flags[instr.arg0] |= INSTR_JUMP;
-                        scan_segment(r->target_segment, instr.arg0);
+                        scan_segment(r->target_segment, instr.arg0, ne);
                     }
 
                     break;
@@ -342,7 +318,7 @@ static void scan_segment(word cs, word ip) {
                 seg->instr_flags[instr.arg0] |= INSTR_JUMP;
 
             /* scan it */
-            scan_segment(cs, instr.arg0);
+            scan_segment(cs, instr.arg0, ne);
         }
 
         if (instr.op.flags & OP_STOP)
@@ -395,7 +371,7 @@ static void print_segment_flags(word flags) {
     printf("    Flags: 0x%04x (%s)\n", flags, buffer);
 }
 
-static void read_reloc(const struct segment *seg, struct reloc *r) {
+static void read_reloc(const struct segment *seg, struct reloc *r, struct ne *ne) {
     byte size = read_byte();
     byte type = read_byte();
     word offset = read_word();
@@ -415,15 +391,15 @@ static void read_reloc(const struct segment *seg, struct reloc *r) {
         char *name;
 
         if (module == 0xff) {
-            r->target_segment = entry_table[ordinal-1].segment;
-            r->target_offset = entry_table[ordinal-1].offset;
+            r->target_segment = ne->enttab[ordinal-1].segment;
+            r->target_offset = ne->enttab[ordinal-1].offset;
         } else {
             r->target_segment = module;
             r->target_offset = ordinal;
         }
 
         /* grab the name, if we can */
-        if ((name = get_entry_name(r->target_segment, r->target_offset)))
+        if ((name = get_entry_name(r->target_segment, r->target_offset, ne)))
             r->text = name;
     } else if ((type & 3) == 1) {
         /* imported ordinal */
@@ -498,93 +474,115 @@ static void free_reloc(struct reloc *reloc_data, word reloc_count) {
     free(reloc_data);
 }
 
-void print_segments(word count, word align, word entry_cs, word entry_ip) {
-    unsigned i, seg;
+void read_segments(long start, struct ne *ne) {
+    word entry_cs = ne->header.ne_cs;
+    word entry_ip = ne->header.ne_ip;
+    word count = ne->header.ne_cseg;
+    unsigned i, cs;
+    struct segment *seg;
 
-    segments = malloc(count * sizeof(struct segment));
+    fseek(f, start, SEEK_SET);
 
-    for (seg = 0; seg < count; seg++) {
-        segments[seg].cs = seg+1;
-        segments[seg].start = read_word() << align;
-        segments[seg].length = read_word();
-        segments[seg].flags = read_word();
-        segments[seg].min_alloc = read_word();
+    ne->segments = malloc(count * sizeof(struct segment));
+
+    for (cs = 1; cs <= count; cs++) {
+        seg = &ne->segments[cs-1];
+        seg->cs = cs;
+        seg->start = read_word() << ne->header.ne_align;
+        seg->length = read_word();
+        seg->flags = read_word();
+        seg->min_alloc = read_word();
 
         /* Use min_alloc rather than length because data can "hang over". */
-        segments[seg].instr_flags = calloc(segments[seg].min_alloc, sizeof(byte));
+        seg->instr_flags = calloc(seg->min_alloc, sizeof(byte));
     }
 
     /* First pass: just read the relocation data */
-    for (seg = 0; seg < count; seg++) {
-        if (segments[seg].flags & 0x0100) {
-            fseek(f, segments[seg].start + segments[seg].length, SEEK_SET);
-            segments[seg].reloc_count = read_word();
-            segments[seg].reloc_table = malloc(segments[seg].reloc_count * sizeof(struct reloc));
+    for (cs = 1; cs <= count; cs++) {
+        seg = &ne->segments[cs-1];
 
-            for (i = 0; i < segments[seg].reloc_count; i++) {
-                fseek(f, segments[seg].start + segments[seg].length + 2 + (i*8), SEEK_SET);
-                read_reloc(&segments[seg], &segments[seg].reloc_table[i]);
+        if (seg->flags & 0x0100) {
+            fseek(f, seg->start + seg->length, SEEK_SET);
+            seg->reloc_count = read_word();
+            seg->reloc_table = malloc(seg->reloc_count * sizeof(struct reloc));
+
+            for (i = 0; i < seg->reloc_count; i++) {
+                fseek(f, seg->start + seg->length + 2 + (i*8), SEEK_SET);
+                read_reloc(seg, &seg->reloc_table[i], ne);
             }
         } else {
-            segments[seg].reloc_count = 0;
-            segments[seg].reloc_table = NULL;
+            seg->reloc_count = 0;
+            seg->reloc_table = NULL;
         }
     }
 
     /* Second pass: scan entry points (we have to do this after we read
      * relocation data for all segments.) */
-    for (i = 0; i < entry_count; i++) {
+    for (i = 0; i < ne->entcount; i++) {
 
         /* don't scan exported values */
-        if (entry_table[i].segment == 0 ||
-            entry_table[i].segment == 0xfe) continue;
+        if (ne->enttab[i].segment == 0 ||
+            ne->enttab[i].segment == 0xfe) continue;
 
         /* or values that live in data segments */
-        if (segments[entry_table[i].segment-1].flags & 0x0001) continue;
+        if (ne->segments[ne->enttab[i].segment-1].flags & 0x0001) continue;
 
         /* Annoyingly, data can be put in code segments, and without any
          * apparent indication that it is not code. As a dumb heuristic,
          * only scan exported entries—this won't work universally, and it
          * may potentially miss private entries, but it's better than nothing. */
-        if (!(entry_table[i].flags & 1)) continue;
+        if (!(ne->enttab[i].flags & 1)) continue;
 
-        scan_segment(entry_table[i].segment, entry_table[i].offset);
-        segments[entry_table[i].segment-1].instr_flags[entry_table[i].offset] |= INSTR_FUNC;
+        scan_segment(ne->enttab[i].segment, ne->enttab[i].offset, ne);
+        ne->segments[ne->enttab[i].segment-1].instr_flags[ne->enttab[i].offset] |= INSTR_FUNC;
     }
 
     /* and don't forget to scan the program entry point */
     if (entry_cs == 0 && entry_ip == 0) {
         /* do nothing */
-    } else if (entry_ip >= segments[entry_cs-1].length) {
+    } else if (entry_ip >= ne->segments[entry_cs-1].length) {
         /* see note above under relocations */
-        warn("Entry point %d:%04x exceeds segment length (%04x)\n", entry_cs, entry_ip, segments[seg].length);
+        warn("Entry point %d:%04x exceeds segment length (%04x)\n", entry_cs, entry_ip, ne->segments[entry_cs-1].length);
     } else {
-        segments[entry_cs-1].instr_flags[entry_ip] |= INSTR_FUNC;
-        scan_segment(entry_cs, entry_ip);
+        ne->segments[entry_cs-1].instr_flags[entry_ip] |= INSTR_FUNC;
+        scan_segment(entry_cs, entry_ip, ne);
+    }
+}
+
+void free_segments(struct ne *ne) {
+    unsigned cs;
+    struct segment *seg;
+
+    for (cs = 1; cs <= ne->header.ne_cseg; cs++) {
+        seg = &ne->segments[cs-1];
+        free_reloc(seg->reloc_table, seg->reloc_count);
+        free(seg->instr_flags);
     }
 
-    /* Final pass: print data */
-    for (seg = 0; seg < count; seg++) {
-        printf("Segment %d (start = 0x%lx, length = 0x%x, minimum allocation = 0x%x):\n",
-            seg+1, segments[seg].start, segments[seg].length,
-            segments[seg].min_alloc ? segments[seg].min_alloc : 65536);
-        print_segment_flags(segments[seg].flags);
+    free(ne->segments);
+}
 
-        if (segments[seg].flags & 0x0001) {
+void print_segments(struct ne *ne) {
+    unsigned cs;
+    struct segment *seg;
+
+    /* Final pass: print data */
+    for (cs = 1; cs <= ne->header.ne_cseg; cs++) {
+        seg = &ne->segments[cs-1];
+
+        printf("Segment %d (start = 0x%lx, length = 0x%x, minimum allocation = 0x%x):\n",
+            cs, seg->start, seg->length, seg->min_alloc ? seg->min_alloc : 65536);
+        print_segment_flags(seg->flags);
+
+        if (seg->flags & 0x0001) {
             /* FIXME: We should at least make a special note of entry points. */
             /* FIXME #2: Data segments can still have relocations... */
-            print_data(&segments[seg]);
+            print_data(seg);
         } else {
             /* like objdump, print the whole code segment like a data segment */
             if (opts & FULL_CONTENTS)
-                print_data(&segments[seg]);
-            print_disassembly(&segments[seg]);
+                print_data(seg);
+            print_disassembly(seg, ne);
         }
-
-        /* and free our segment per-segment data */
-        free_reloc(segments[seg].reloc_table, segments[seg].reloc_count);
-        free(segments[seg].instr_flags);
     }
-
-    free(segments);
 }

@@ -29,25 +29,6 @@
 
 #pragma pack(1)
 
-struct header_mz {
-    word  e_magic;      /* 00: MZ Header signature */
-    word  e_cblp;       /* 02: Bytes on last page of file */
-    word  e_cp;         /* 04: Pages in file */
-    word  e_crlc;       /* 06: Relocations */
-    word  e_cparhdr;    /* 08: Size of header in paragraphs */
-    word  e_minalloc;   /* 0a: Minimum extra paragraphs needed */
-    word  e_maxalloc;   /* 0c: Maximum extra paragraphs needed */
-    word  e_ss;         /* 0e: Initial (relative) SS value */
-    word  e_sp;         /* 10: Initial SP value */
-    word  e_csum;       /* 12: Checksum */
-    word  e_ip;         /* 14: Initial IP value */
-    word  e_cs;         /* 16: Initial (relative) CS value */
-    word  e_lfarlc;     /* 18: File address of relocation table */
-    word  e_ovno;       /* 1a: Overlay number */
-};
-
-STATIC_ASSERT(sizeof(struct header_mz) == 0x1c);
-
 static void print_header(struct header_mz *header) {
     printf("Minimum extra allocation: %d bytes\n", header->e_minalloc * 16); /* 0a */
     printf("Maximum extra allocation: %d bytes\n", header->e_maxalloc * 16); /* 0c */
@@ -183,41 +164,49 @@ static void scan_segment(dword ip, dword start, dword length, byte *flags) {
     warn_at("Scan reached the end of segment.\n");
 }
 
-void dumpmz(void) {
-    struct header_mz header;
-
+void readmz(struct mz *mz) {
     fseek(f, 0, SEEK_SET);
-    fread(&header, sizeof(header), 1, f);
+    fread(&mz->header, sizeof(struct header_mz), 1, f);
 
     /* read the relocation table */
-    reloc_table = malloc(header.e_crlc * sizeof(reloc));
-    fseek(f, header.e_lfarlc, SEEK_SET);
-    fread(reloc_table, sizeof(reloc), header.e_crlc, f);
+    mz->reltab = malloc(mz->header.e_crlc * sizeof(struct reloc));
+    fseek(f, mz->header.e_lfarlc, SEEK_SET);
+    fread(mz->reltab, sizeof(struct reloc), mz->header.e_crlc, f);
+}
+
+void freemz(struct mz *mz) {
+    free(mz->reltab);
+}
+
+void dumpmz(void) {
+    struct mz mz;
+
+    readmz(&mz);
 
     printf("Module type: MZ (DOS executable)\n");
 
     if (mode & DUMPHEADER)
-        print_header(&header);
+        print_header(&mz.header);
 
     if (mode & DISASSEMBLE) {
-        dword entry_point = realaddr(header.e_cs, header.e_ip);
+        dword entry_point = realaddr(mz.header.e_cs, mz.header.e_ip);
         byte *flags;
         dword length;
 
-        length = ((header.e_cp - 1) * 512) + header.e_cblp;
-        if (header.e_cblp == 0) length += 512;
+        length = ((mz.header.e_cp - 1) * 512) + mz.header.e_cblp;
+        if (mz.header.e_cblp == 0) length += 512;
         flags = calloc(length, sizeof(byte));
 
         /* Scan the segment */
         if (entry_point > length)
             warn("Entry point %05x exceeds segment length (%05x)\n", entry_point, length);
         flags[entry_point] |= INSTR_FUNC;
-        scan_segment(entry_point, header.e_cparhdr * 16, length, flags);
+        scan_segment(entry_point, mz.header.e_cparhdr * 16, length, flags);
 
-        print_code(header.e_cparhdr * 16, length, flags);
+        print_code(mz.header.e_cparhdr * 16, length, flags);
 
         free(flags);
     }
 
-    free(reloc_table);
+    freemz(&mz);
 }
