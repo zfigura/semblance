@@ -526,14 +526,14 @@ static const struct op instructions_0F[] = {
     {0xBF, 8, 16, "movsx",      REG,    RM},
     /* C0/1 - xadd? */
 
-    {0xC8, 0, 16, "bswap",      AX},
-    {0xC9, 0, 16, "bswap",      CX},
-    {0xCA, 0, 16, "bswap",      DX},
-    {0xCB, 0, 16, "bswap",      BX},
-    {0xCC, 0, 16, "bswap",      SP},
-    {0xCD, 0, 16, "bswap",      BP},
-    {0xCE, 0, 16, "bswap",      SI},
-    {0xCF, 0, 16, "bswap",      DI},
+    {0xC8, 8, 16, "bswap",      AX},
+    {0xC9, 8, 16, "bswap",      CX},
+    {0xCA, 8, 16, "bswap",      DX},
+    {0xCB, 8, 16, "bswap",      BX},
+    {0xCC, 8, 16, "bswap",      SP},
+    {0xCD, 8, 16, "bswap",      BP},
+    {0xCE, 8, 16, "bswap",      SI},
+    {0xCF, 8, 16, "bswap",      DI},
 };
 
 /* mod < 3 (instructions with memory args) */
@@ -1320,6 +1320,12 @@ static const char modrm16_masm[8][6] = {
     "bx+si", "bx+di", "bp+si", "bp+di", "si", "di", "bp", "bx"
 };
 
+/* Figure out whether it's a register, so we know whether to dispense with size
+ * indicators on a memory access. */
+static int is_reg(enum arg arg) {
+    return ((arg >= AL && arg <= GS) || (arg >= REG && arg <= TR32));
+};
+
 #ifdef USE_WARN
 #define warn_at(...) \
     do { fprintf(stderr, "Warning: %s: ", ip); \
@@ -1533,7 +1539,7 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
             int has_sib = (instr->sib_scale != 0 && instr->sib_index < 8);
             if (instr->op.flags & OP_FAR)
                 strcat(out, "far ");
-            else if (instr->op.arg0 != REG && instr->op.arg1 != REG) {
+            else if (!is_reg(instr->op.arg0) && !is_reg(instr->op.arg1)) {
                 switch (instr->op.size) {
                 case  8: strcat(out, "byte "); break;
                 case 16: strcat(out, "word "); break;
@@ -1829,8 +1835,8 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
             strcpy(instr->op.name, (instr->op.size == 32) ? "movsbl" : "movsbw");
         else if (instr->op.opcode == 0x0FBF)     /* movsx */
             strcpy(instr->op.name, (instr->op.size == 32) ? "movswl" : "movsww");
-        else if (instr->op.arg0 != REG &&
-                 instr->op.arg1 != REG &&
+        else if (!is_reg(instr->op.arg0) &&
+                 !is_reg(instr->op.arg1) &&
                  instr->modrm_disp != DISP_REG) {
             if ((instr->op.flags & OP_LL) == OP_LL)
                 strcat(instr->op.name, "ll");

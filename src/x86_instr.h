@@ -27,20 +27,20 @@ enum arg {
 
     /* to be read from ModRM, appropriately */
     RM,         /* register/memory */
+    MM,         /* MMX register/memory */
+    XM,         /* SSE register/memory */
     MEM,        /* memory only (using 0x11xxxxxx is invalid) */
     REGONLY,    /* register only (not using 0x11xxxxxx is invalid) */
+    MMXONLY,    /* MMX register only (not using 0x11xxxxxx is invalid) */
+    XMMONLY,    /* SSE register only (not using 0x11xxxxxx is invalid) */
     REG,        /* register */
+    MMX,        /* MMX register */
+    XMM,        /* SSE register */
     SEG16,      /* segment register */
     REG32,      /* 32-bit only register, used for cr/dr/tr */
     CR32,       /* control register */
     DR32,       /* debug register */
     TR32,       /* test register */
-    MM,         /* MMX register/memory */
-    MMX,        /* MMX register */
-    MMXONLY,    /* MMX register only (not using 0x11xxxxxx is invalid) */
-    XM,         /* SSE register/memory */
-    XMM,        /* SSE register */
-    XMMONLY,    /* SSE register only (not using 0x11xxxxxx is invalid) */
 
     /* floating point regs */
     ST,         /* top of stack aka st(0) */
