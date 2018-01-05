@@ -1329,6 +1329,7 @@ static int get_arg(dword ip, const byte *p, dword *value, enum arg argtype, stru
             p++;
             instr->sib_scale = 1 << MODOF(*p);
             instr->sib_index = REGOF(*p);
+            if (instr->sib_index == 4) instr->sib_index = 8;
             rm = MEMOF(*p);
             ret++;
         }
