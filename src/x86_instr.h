@@ -28,12 +28,19 @@ enum arg {
     /* to be read from ModRM, appropriately */
     RM,         /* register/memory */
     MEM,        /* memory only (using 0x11xxxxxx is invalid) */
+    REGONLY,    /* register only (not using 0x11xxxxxx is invalid) */
     REG,        /* register */
     SEG16,      /* segment register */
     REG32,      /* 32-bit only register, used for cr/dr/tr */
     CR32,       /* control register */
     DR32,       /* debug register */
     TR32,       /* test register */
+    MM,         /* MMX register/memory */
+    MMX,        /* MMX register */
+    MMXONLY,    /* MMX register only (not using 0x11xxxxxx is invalid) */
+    XM,         /* SSE register/memory */
+    XMM,        /* SSE register */
+    XMMONLY,    /* SSE register only (not using 0x11xxxxxx is invalid) */
 
     /* floating point regs */
     ST,         /* top of stack aka st(0) */
@@ -59,16 +66,16 @@ enum arg {
 #define OP_S            0x1000  /* (FPU) op takes -s if GCC */
 #define OP_L            0x2000  /* (FPU) op takes -l if GCC */
 #define OP_LL           0x3000  /* (FPU) op takes -ll if GCC */
+/* -t doesn't need to be marked */
 
 #define OP_STOP         0x4000  /* stop scanning (jmp, ret) */
 #define OP_BRANCH       0x8000  /* branch to target (jmp, jXX) */
-/* -t doesn't need to be marked */
 
 struct op {
     word opcode;
     byte subcode;
     byte size;  /* one of: 8, 16, 32, 64, 80, or 0 if not sized */
-    char name[8];
+    char name[11];
     enum arg arg0; /* usually dest */
     enum arg arg1; /* usually src */
     /* arg2 only for imul, shrd, shld */
@@ -113,7 +120,7 @@ struct instr {
     int usedmem:1;  /* used for error checking */
 };
 
-extern int get_instr(word ip, const byte *p, struct instr *instr, int is32);
+extern int get_instr(dword ip, const byte *p, struct instr *instr, int is32);
 extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, char *arg0, char *arg1, char *comment);
 
 /* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */

@@ -23,6 +23,11 @@
 #include <string.h>
 #include "x86_instr.h"
 
+/* this is easier than doing bitfields */
+#define MODOF(x)    ((x) >> 6)
+#define REGOF(x)    (((x) >> 3) & 7)
+#define MEMOF(x)    ((x) & 7)
+
 static const struct op instructions[256] = {
     {0x00, 8,  8, "add",        RM,     REG,    OP_LOCK},
     {0x01, 8, 16, "add",        RM,     REG,    OP_LOCK},
@@ -427,6 +432,8 @@ static const struct op instructions_0F[] = {
     {0x08, 8,  0, "invd"},
     {0x09, 8,  0, "wbinvd"},
 
+    {0x1f, 8, 16, "nop",        RM},
+
     {0x20, 8,  0, "mov",        REG32,  CR32},  /* here mod is simply ignored */
     {0x21, 8,  0, "mov",        REG32,  DR32},
     {0x22, 8,  0, "mov",        CR32,   REG32},
@@ -434,6 +441,23 @@ static const struct op instructions_0F[] = {
     {0x24, 8,  0, "mov",        REG32,  TR32},
     /* 25 unused */
     {0x26, 8,  0, "mov",        TR32,   REG32},
+
+    {0x40, 8, 16, "cmovo",      REG,    RM},
+    {0x41, 8, 16, "cmovno",     REG,    RM},
+    {0x42, 8, 16, "cmovb",      REG,    RM},
+    {0x43, 8, 16, "cmovae",     REG,    RM},
+    {0x44, 8, 16, "cmovz",      REG,    RM},
+    {0x45, 8, 16, "cmovnz",     REG,    RM},
+    {0x46, 8, 16, "cmovbe",     REG,    RM},
+    {0x47, 8, 16, "cmova",      REG,    RM},
+    {0x48, 8, 16, "cmovs",      REG,    RM},
+    {0x49, 8, 16, "cmovns",     REG,    RM},
+    {0x4A, 8, 16, "cmovp",      REG,    RM},
+    {0x4B, 8, 16, "cmovnp",     REG,    RM},
+    {0x4C, 8, 16, "cmovl",      REG,    RM},
+    {0x4D, 8, 16, "cmovge",     REG,    RM},
+    {0x4E, 8, 16, "cmovle",     REG,    RM},
+    {0x4F, 8, 16, "cmovg",      REG,    RM},
 
     {0x80, 8,  0, "jo",         REL16,  0,      OP_BRANCH},
     {0x81, 8,  0, "jno",        REL16,  0,      OP_BRANCH},
@@ -686,6 +710,358 @@ static const struct op instructions_fpu_single[] = {
     {0xDF, 0xE0, 0, "fnstsw", AX},
 };
 
+static int get_fpu_instr(const byte *p, struct op *op) {
+    byte subcode = REGOF(p[1]);
+    byte index = (p[0] & 7)*8 + subcode;
+    unsigned i;
+
+    if (MODOF(p[1]) < 3) {
+        if (instructions_fpu_m[index].name[0])
+            *op = instructions_fpu_m[index];
+        return 0;
+    } else {
+        if (instructions_fpu_r[index].name[0]) {
+            *op = instructions_fpu_r[index];
+            return 0;
+        } else {
+            /* try the single op list */
+            for (i=0; i<sizeof(instructions_fpu_single)/sizeof(struct op); i++) {
+                if (p[0] == instructions_fpu_single[i].opcode &&
+                    p[1] == instructions_fpu_single[i].subcode) {
+                    *op = instructions_fpu_single[i];
+                    break;
+                }
+            }
+        }
+        return 1;
+    }
+}
+
+static const struct op instructions_sse[] = {
+    {0x10, 8,  0, "movups",     XMM,    XM},
+    {0x11, 8,  0, "movups",     XM,     XMM},
+    {0x12, 8,  0, "movlps",     XMM,    XM},    /* fixme: movhlps */
+    {0x13, 8,  0, "movlps",     MEM,    XMM},
+    {0x14, 8,  0, "unpcklps",   XMM,    XM},
+    {0x15, 8,  0, "unpckhps",   XMM,    XM},
+    {0x16, 8,  0, "movhps",     XMM,    XM},    /* fixme: movlhps */
+    {0x17, 8,  0, "movhps",     MEM,    XMM},
+
+    {0x28, 8,  0, "movaps",     XMM,    XM},
+    {0x29, 8,  0, "movaps",     XM,     XMM},
+    {0x2A, 8,  0, "cvtpi2ps",   XMM,    MM},
+    {0x2B, 8,  0, "movntps",    MEM,    XMM},
+    {0x2C, 8,  0, "cvttps2pi",  MMX,    XM},
+    {0x2D, 8,  0, "cvtps2pi",   MMX,    XM},
+    {0x2E, 8,  0, "ucomiss",    XMM,    XM},
+    {0x2F, 8,  0, "comiss",     XMM,    XM},
+
+    /* fixme: 38-3A */
+
+    {0x50, 8,  0, "movmskps",   REGONLY,XMM},
+    {0x51, 8,  0, "sqrtps",     XMM,    XM},
+    {0x52, 8,  0, "rsqrtps",    XMM,    XM},
+    {0x53, 8,  0, "rcpps",      XMM,    XM},
+    {0x54, 8,  0, "andps",      XMM,    XM},
+    {0x55, 8,  0, "andnps",     XMM,    XM},
+    {0x56, 8,  0, "orps",       XMM,    XM},
+    {0x57, 8,  0, "xorps",      XMM,    XM},
+    {0x58, 8,  0, "addps",      XMM,    XM},
+    {0x59, 8,  0, "mulps",      XMM,    XM},
+    {0x5A, 8,  0, "cvtps2pd",   XMM,    XM},
+    {0x5B, 8,  0, "cvtdq2ps",   XMM,    XM},
+    {0x5C, 8,  0, "subps",      XMM,    XM},
+    {0x5D, 8,  0, "minps",      XMM,    XM},
+    {0x5E, 8,  0, "divps",      XMM,    XM},
+    {0x5F, 8,  0, "maxps",      XMM,    XM},
+    {0x60, 8,  0, "punpcklbw",  MMX,    MM},
+    {0x61, 8,  0, "punpcklwd",  MMX,    MM},
+    {0x62, 8,  0, "punpckldq",  MMX,    MM},
+    {0x63, 8,  0, "packsswb",   MMX,    MM},
+    {0x64, 8,  0, "pcmpgtb",    MMX,    MM},
+    {0x65, 8,  0, "pcmpgtw",    MMX,    MM},
+    {0x66, 8,  0, "pcmpgtd",    MMX,    MM},
+    {0x67, 8,  0, "packuswb",   MMX,    MM},
+    {0x68, 8,  0, "punpckhbw",  MMX,    MM},
+    {0x69, 8,  0, "punpckhwd",  MMX,    MM},
+    {0x6A, 8,  0, "punpckhdq",  MMX,    MM},
+    {0x6B, 8,  0, "packssdw",   MMX,    MM},
+    /* 6C/D unused */
+    {0x6E, 8,  0, "movd",       MMX,    RM},
+    {0x6F, 8,  0, "movq",       MMX,    MM},
+    {0x70, 8,  0, "pshufw",     MMX,    MM,     OP_ARG2_IMM8},
+    {0x71, 2,  0, "psrlw",      MMX,    IMM8},  /* fixme: make sure this works */
+    {0x71, 4,  0, "psraw",      MMX,    IMM8},
+    {0x71, 6,  0, "psllw",      MMX,    IMM8},
+    {0x72, 2,  0, "psrld",      MMX,    IMM8},
+    {0x72, 4,  0, "psrad",      MMX,    IMM8},
+    {0x72, 6,  0, "pslld",      MMX,    IMM8},
+    {0x73, 2,  0, "psrlq",      MMX,    IMM8},
+    {0x73, 6,  0, "psllq",      MMX,    IMM8},
+    {0x74, 8,  0, "pcmpeqb",    MMX,    MM},
+    {0x75, 8,  0, "pcmpeqw",    MMX,    MM},
+    {0x76, 8,  0, "pcmpeqd",    MMX,    MM},
+    {0x77, 8,  0, "emms"},
+
+    {0x7E, 8,  0, "movd",       RM,     MMX},
+    {0x7F, 8,  0, "movq",       MM,     MMX},
+
+    {0xC2, 8,  0, "cmpps",      XMM,    XM,     OP_ARG2_IMM8},
+    {0xC3, 8,  0, "movnti",     MEM,    REG},
+    {0xC4, 8,  0, "pinsrw",     MMX,    RM,     OP_ARG2_IMM8},
+    {0xC5, 8,  0, "pextrw",     REGONLY,MMX,    OP_ARG2_IMM8},
+    {0xC6, 8,  0, "shufps",     XMM,    XM,     OP_ARG2_IMM8},
+
+    {0xD1, 8,  0, "psrlw",      MMX,    MM},
+    {0xD2, 8,  0, "psrld",      MMX,    MM},
+    {0xD3, 8,  0, "psrlq",      MMX,    MM},
+    {0xD4, 8,  0, "paddd",      MMX,    MM},
+    {0xD5, 8,  0, "pmullw",     MMX,    MM},
+    /* D6 unused */
+    {0xD7, 8,  0, "pmovmskb",   REGONLY,MMX},
+    {0xD8, 8,  0, "psubusb",    MMX,    MM},
+    {0xD9, 8,  0, "psubusw",    MMX,    MM},
+    {0xDA, 8,  0, "pminub",     MMX,    MM},
+    {0xDB, 8,  0, "pand",       MMX,    MM},
+    {0xDC, 8,  0, "paddusb",    MMX,    MM},
+    {0xDD, 8,  0, "paddusw",    MMX,    MM},
+    {0xDE, 8,  0, "pmaxub",     MMX,    MM},
+    {0xDF, 8,  0, "pandn",      MMX,    MM},
+    {0xE0, 8,  0, "pavgb",      MMX,    MM},
+    {0xE1, 8,  0, "psraw",      MMX,    MM},
+    {0xE2, 8,  0, "psrad",      MMX,    MM},
+    {0xE3, 8,  0, "pavgw",      MMX,    MM},
+    {0xE4, 8,  0, "pmulhuw",    MMX,    MM},
+    {0xE5, 8,  0, "pmulhw",     MMX,    MM},
+    /* E6 unused */
+    {0xE7, 8,  0, "movntq",     MEM,    MMX},
+    {0xE8, 8,  0, "psubsb",     MMX,    MM},
+    {0xE9, 8,  0, "psubsw",     MMX,    MM},
+    {0xEA, 8,  0, "pminsw",     MMX,    MM},
+    {0xEB, 8,  0, "por",        MMX,    MM},
+    {0xEC, 8,  0, "paddsb",     MMX,    MM},
+    {0xED, 8,  0, "paddsw",     MMX,    MM},
+    {0xEE, 8,  0, "pmaxsw",     MMX,    MM},
+    {0xEF, 8,  0, "pxor",       MMX,    MM},
+    /* F0 unused */
+    {0xF1, 8,  0, "psllw",      MMX,    MM},
+    {0xF2, 8,  0, "pslld",      MMX,    MM},
+    {0xF3, 8,  0, "psllq",      MMX,    MM},
+    {0xF4, 8,  0, "pmuludq",    MMX,    MM},
+    {0xF5, 8,  0, "pmaddwd",    MMX,    MM},
+    {0xF6, 8,  0, "psadbw",     MMX,    MM},
+    {0xF7, 8,  0, "maskmovq",   MMX,    MMXONLY},
+    {0xF8, 8,  0, "psubb",      MMX,    MM},
+    {0xF9, 8,  0, "psubw",      MMX,    MM},
+    {0xFA, 8,  0, "psubd",      MMX,    MM},
+    {0xFB, 8,  0, "psubq",      MMX,    MM},
+    {0xFC, 8,  0, "paddb",      MMX,    MM},
+    {0xFD, 8,  0, "paddw",      MMX,    MM},
+    {0xFE, 8,  0, "paddd",      MMX,    MM},
+};
+
+static const struct op instructions_sse_op32[] = {
+    {0x10, 8,  0, "movupd",     XMM,    XM},
+    {0x11, 8,  0, "movupd",     XM,     XMM},
+    {0x12, 8,  0, "movlpd",     XMM,    XM},    /* fixme: movhlps */
+    {0x13, 8,  0, "movlpd",     MEM,    XMM},
+    {0x14, 8,  0, "unpcklpd",   XMM,    XM},
+    {0x15, 8,  0, "unpckhpd",   XMM,    XM},
+    {0x16, 8,  0, "movhpd",     XMM,    XM},    /* fixme: movlhps */
+    {0x17, 8,  0, "movhpd",     MEM,    XMM},
+
+    {0x28, 8,  0, "movapd",     XMM,    XM},
+    {0x29, 8,  0, "movapd",     XM,     XMM},
+    {0x2A, 8,  0, "cvtpi2pd",   XMM,    MM},
+    {0x2B, 8,  0, "movntpd",    MEM,    XMM},
+    {0x2C, 8,  0, "cvttpd2pi",  MMX,    XM},
+    {0x2D, 8,  0, "cvtpd2pi",   MMX,    XM},
+    {0x2E, 8,  0, "ucomisd",    XMM,    XM},
+    {0x2F, 8,  0, "comisd",     XMM,    XM},
+
+    {0x50, 8,  0, "movmskpd",   REGONLY,XMM},
+    {0x51, 8,  0, "sqrtpd",     XMM,    XM},
+    /* 52/3 unused */
+    {0x54, 8,  0, "andpd",      XMM,    XM},
+    {0x55, 8,  0, "andnpd",     XMM,    XM},
+    {0x56, 8,  0, "orpd",       XMM,    XM},
+    {0x57, 8,  0, "xorpd",      XMM,    XM},
+    {0x58, 8,  0, "addpd",      XMM,    XM},
+    {0x59, 8,  0, "mulpd",      XMM,    XM},
+    {0x5A, 8,  0, "cvtpd2ps",   XMM,    XM},
+    {0x5B, 8,  0, "cvtps2dq",   XMM,    XM},
+    {0x5C, 8,  0, "subpd",      XMM,    XM},
+    {0x5D, 8,  0, "minpd",      XMM,    XM},
+    {0x5E, 8,  0, "divpd",      XMM,    XM},
+    {0x5F, 8,  0, "maxpd",      XMM,    XM},
+    {0x60, 8,  0, "punpcklbw",  XMM,    XM},
+    {0x61, 8,  0, "punpcklwd",  XMM,    XM},
+    {0x62, 8,  0, "punpckldq",  XMM,    XM},
+    {0x63, 8,  0, "packsswb",   XMM,    XM},
+    {0x64, 8,  0, "pcmpgtb",    XMM,    XM},
+    {0x65, 8,  0, "pcmpgtw",    XMM,    XM},
+    {0x66, 8,  0, "pcmpgtd",    XMM,    XM},
+    {0x67, 8,  0, "packuswb",   XMM,    XM},
+    {0x68, 8,  0, "punpckhbw",  XMM,    XM},
+    {0x69, 8,  0, "punpckhwd",  XMM,    XM},
+    {0x6A, 8,  0, "punpckhdq",  XMM,    XM},
+    {0x6B, 8,  0, "packssdw",   XMM,    XM},
+    {0x6C, 8,  0, "punpcklqdq", XMM,    XM},
+    {0x6D, 8,  0, "punpckhqdq", XMM,    XM},
+    {0x6E, 8,  0, "movd",       XMM,    RM},
+    {0x6F, 8,  0, "movdqa",     XMM,    XM},
+    {0x70, 8,  0, "pshufd",     XMM,    XM,    OP_ARG2_IMM8},
+    {0x71, 2,  0, "psrlw",      XMMONLY,IMM8},
+    {0x71, 4,  0, "psraw",      XMMONLY,IMM8},
+    {0x71, 6,  0, "psllw",      XMMONLY,IMM8},
+    {0x72, 2,  0, "psrld",      XMMONLY,IMM8},
+    {0x72, 4,  0, "psrad",      XMMONLY,IMM8},
+    {0x72, 6,  0, "pslld",      XMMONLY,IMM8},
+    {0x73, 2,  0, "psrlq",      XMMONLY,IMM8},
+    {0x73, 3,  0, "psrldq",     XMMONLY,IMM8},
+    {0x73, 6,  0, "psllq",      XMMONLY,IMM8},
+    {0x73, 7,  0, "pslldq",     XMMONLY,IMM8},
+    {0x74, 8,  0, "pcmpeqb",    XMM,    XM},
+    {0x75, 8,  0, "pcmpeqw",    XMM,    XM},
+    {0x76, 8,  0, "pcmpeqd",    XMM,    XM},
+
+    {0x7C, 8,  0, "haddpd",     XMM,    XM},
+    {0x7D, 8,  0, "hsubpd",     XMM,    XM},
+    {0x7E, 8,  0, "movd",       RM,     XMM},
+    {0x7F, 8,  0, "movdqa",     XM,     XMM},
+
+    {0xC2, 8,  0, "cmppd",      XMM,    XM,     OP_ARG2_IMM8},
+    /* C3 unused */
+    {0xC4, 8,  0, "pinsrw",     XMM,    RM,     OP_ARG2_IMM8},
+    {0xC5, 8,  0, "pextrw",     REGONLY,XMM,    OP_ARG2_IMM8},
+    {0xC6, 8,  0, "shufpd",     XMM,    XM,     OP_ARG2_IMM8},
+
+    {0xD0, 8,  0, "addsubpd",   XMM,    XM},
+    {0xD1, 8,  0, "psrlw",      XMM,    XM},
+    {0xD2, 8,  0, "psrld",      XMM,    XM},
+    {0xD3, 8,  0, "psrlq",      XMM,    XM},
+    {0xD4, 8,  0, "paddd",      XMM,    XM},
+    {0xD5, 8,  0, "pmullw",     XMM,    XM},
+    {0xD6, 8,  0, "movq",       XM,     XMM},
+    {0xD7, 8,  0, "pmovmskb",   REGONLY,XMM},
+    {0xD8, 8,  0, "psubusb",    XMM,    XM},
+    {0xD9, 8,  0, "psubusw",    XMM,    XM},
+    {0xDA, 8,  0, "pminub",     XMM,    XM},
+    {0xDB, 8,  0, "pand",       XMM,    XM},
+    {0xDC, 8,  0, "paddusb",    XMM,    XM},
+    {0xDD, 8,  0, "paddusw",    XMM,    XM},
+    {0xDE, 8,  0, "pmaxub",     XMM,    XM},
+    {0xDF, 8,  0, "pandn",      XMM,    XM},
+    {0xE0, 8,  0, "pavgb",      XMM,    XM},
+    {0xE1, 8,  0, "psraw",      XMM,    XM},
+    {0xE2, 8,  0, "psrad",      XMM,    XM},
+    {0xE3, 8,  0, "pavgw",      XMM,    XM},
+    {0xE4, 8,  0, "pmulhuw",    XMM,    XM},
+    {0xE5, 8,  0, "pmulhw",     XMM,    XM},
+    {0xE6, 8,  0, "cvttpd2dq",  XMM,    XM},
+    {0xE7, 8,  0, "movntdq",    MEM,    XMM},
+    {0xE8, 8,  0, "psubsb",     XMM,    XM},
+    {0xE9, 8,  0, "psubsw",     XMM,    XM},
+    {0xEA, 8,  0, "pminsw",     XMM,    XM},
+    {0xEB, 8,  0, "por",        XMM,    XM},
+    {0xEC, 8,  0, "paddsb",     XMM,    XM},
+    {0xED, 8,  0, "paddsw",     XMM,    XM},
+    {0xEE, 8,  0, "pmaxsw",     XMM,    XM},
+    {0xEF, 8,  0, "pxor",       XMM,    XM},
+    /* F0 unused */
+    {0xF1, 8,  0, "psllw",      XMM,    XM},
+    {0xF2, 8,  0, "pslld",      XMM,    XM},
+    {0xF3, 8,  0, "psllq",      XMM,    XM},
+    {0xF4, 8,  0, "pmuludq",    XMM,    XM},
+    {0xF5, 8,  0, "pmaddwd",    XMM,    XM},
+    {0xF6, 8,  0, "psadbw",     XMM,    XM},
+    {0xF7, 8,  0, "maskmovdqu", XMM,    XMMONLY},
+    {0xF8, 8,  0, "psubb",      XMM,    XM},
+    {0xF9, 8,  0, "psubw",      XMM,    XM},
+    {0xFA, 8,  0, "psubd",      XMM,    XM},
+    {0xFB, 8,  0, "psubq",      XMM,    XM},
+    {0xFC, 8,  0, "paddb",      XMM,    XM},
+    {0xFD, 8,  0, "paddw",      XMM,    XM},
+    {0xFE, 8,  0, "paddd",      XMM,    XM},
+};
+
+static const struct op instructions_sse_repne[] = {
+    {0x10, 8,  0, "movsd",      XMM,    XM},
+    {0x11, 8,  0, "movsd",      XM,     XMM},
+    {0x12, 8,  0, "movddup",    XMM,    XM},
+
+    {0x2A, 8,  0, "cvtsi2sd",   XMM,    RM},
+
+    {0x2C, 8,  0, "cvttsd2si",  REG,    XM},
+    {0x2D, 8,  0, "cvtsd2si",   REG,    XM},
+
+    {0x51, 8,  0, "sqrtsd",     XMM,    XM},
+
+    {0x58, 8,  0, "addsd",      XMM,    XM},
+    {0x59, 8,  0, "mulsd",      XMM,    XM},
+    {0x5A, 8,  0, "cvtsd2ss",   XMM,    XM},
+
+    {0x5C, 8,  0, "subsd",      XMM,    XM},
+    {0x5D, 8,  0, "minsd",      XMM,    XM},
+    {0x5E, 8,  0, "divsd",      XMM,    XM},
+    {0x5F, 8,  0, "maxsd",      XMM,    XM},
+
+    {0x70, 8,  0, "pshuflw",    XMM,    XM,     OP_ARG2_IMM8},
+
+    {0x7C, 8,  0, "haddps",     XMM,    XM},
+    {0x7D, 8,  0, "hsubps",     XMM,    XM},
+
+    {0xC2, 8,  0, "cmpsd",      XMM,    XM,     OP_ARG2_IMM8},
+
+    {0xD0, 8,  0, "addsubps",   XMM,    XM},
+
+/*    {0xD6, 8,  0, "movdq2q",    MMX,    XMM}, */
+
+    {0xE6, 8,  0, "cvtpd2dq",   XMM,    XM},
+
+    {0xF0, 8,  0, "lddqu",      XMM,    MEM},
+};
+
+static const struct op instructions_sse_repe[] = {
+    {0x10, 8,  0, "movss",      XMM,    XM},
+    {0x11, 8,  0, "movss",      XM,     XMM},
+    {0x12, 8,  0, "movsldup",   XMM,    XM},
+
+    {0x16, 8,  0, "movshdup",   XMM,    XM},
+
+    {0x2A, 8,  0, "cvtsi2ss",   XMM,    RM},
+
+    {0x2C, 8,  0, "cvttss2si",  REG,    XM},
+    {0x2D, 8,  0, "cvtss2si",   REG,    XM},
+
+    {0x51, 8,  0, "sqrtss",     XMM,    XM},
+    {0x52, 8,  0, "rsqrtss",    XMM,    XM},
+    {0x53, 8,  0, "rcpss",      XMM,    XM},
+
+    {0x58, 8,  0, "addss",      XMM,    XM},
+    {0x59, 8,  0, "mulss",      XMM,    XM},
+    {0x5A, 8,  0, "cvtss2sd",   XMM,    XM},
+    {0x5B, 8,  0, "cvttps2dq",  XMM,    XM},
+    {0x5C, 8,  0, "subss",      XMM,    XM},
+    {0x5D, 8,  0, "minss",      XMM,    XM},
+    {0x5E, 8,  0, "divss",      XMM,    XM},
+    {0x5F, 8,  0, "maxss",      XMM,    XM},
+
+    {0x6F, 8,  0, "movdqu",     XMM,    XM},
+    {0x70, 8,  0, "pshufhw",    XMM,    XM,     OP_ARG2_IMM8},
+
+    {0x7E, 8,  0, "movq",       XMM,    XM},
+    {0x7F, 8,  0, "movdqu",     XM,     XMM},
+
+    {0xB8, 8, 16, "popcnt",     REG,    RM},    /* not SSE */
+
+    {0xC2, 8,  0, "cmpss",      XMM,    XM,     OP_ARG2_IMM8},
+
+/*    {0xD6, 8,  0, "movq2dq",    XMM,    MMX}, */
+
+    {0xE6, 8,  0, "cvtdq2pd",   XMM,    XM},
+};
+
 /* returns the flag if it's a prefix, 0 otherwise */
 static word get_prefix(byte opcode) {
     switch(opcode) {
@@ -702,6 +1078,52 @@ static word get_prefix(byte opcode) {
     case 0xF2: return PREFIX_REPNE;
     case 0xF3: return PREFIX_REPE;
     default: return 0;
+    }
+}
+
+static int instr_matches(const byte opcode, const byte subcode, const struct op *op) {
+    return ((opcode == op->opcode) && ((op->subcode == 8) || (subcode == op->subcode)));
+}
+
+static void get_sse_instr(const byte *p, struct instr *instr) {
+    byte subcode = REGOF(p[1]);
+    unsigned i;
+
+    /* Clear the prefix if it matches. This makes the disassembler work right,
+     * but it might break things later if we want to interpret these. The
+     * solution in that case is probably to modify the size/name instead. */
+
+    if (instr->prefix & PREFIX_OP32) {
+        for (i = 0; i < sizeof(instructions_sse_op32)/sizeof(struct op); i++) {
+            if (instr_matches(p[0], subcode, &instructions_sse_op32[i])) {
+                instr->op = instructions_sse_op32[i];
+                instr->prefix &= ~PREFIX_OP32;
+                return;
+            }
+        }
+    } else if (instr->prefix & PREFIX_REPNE) {
+        for (i = 0; i < sizeof(instructions_sse_repne)/sizeof(struct op); i++) {
+            if (instr_matches(p[0], subcode, &instructions_sse_repne[i])) {
+                instr->op = instructions_sse_repne[i];
+                instr->prefix &= ~PREFIX_REPNE;
+                return;
+            }
+        }
+    } else if (instr->prefix & PREFIX_REPE) {
+        for (i = 0; i < sizeof(instructions_sse_repe)/sizeof(struct op); i++) {
+            if (instr_matches(p[0], subcode, &instructions_sse_repe[i])) {
+                instr->op = instructions_sse_repe[i];
+                instr->prefix &= ~PREFIX_REPE;
+                return;
+            }
+        }
+    } else {
+        for (i = 0; i < sizeof(instructions_sse)/sizeof(struct op); i++) {
+            if (instr_matches(p[0], subcode, &instructions_sse[i])) {
+                instr->op = instructions_sse[i];
+                return;
+            }
+        }
     }
 }
 
@@ -723,7 +1145,7 @@ static word get_prefix(byte opcode) {
  * Does not process specific arguments (e.g. registers, DSBX, ONE...)
  * The parameter out is given as a dword but may require additional casting.
  */
-static int get_arg(word ip, const byte *p, dword *value, enum arg argtype, struct instr *instr, int is32) {
+static int get_arg(dword ip, const byte *p, dword *value, enum arg argtype, struct instr *instr, int is32) {
     *value = 0;
 
     switch (argtype) {
@@ -766,9 +1188,11 @@ static int get_arg(word ip, const byte *p, dword *value, enum arg argtype, struc
         }
     case RM:
     case MEM:
+    case MM:
+    case XM:
     {
-        byte mod = *p >> 6;
-        byte rm  = *p & 7;
+        byte mod = MODOF(*p);
+        byte rm  = MEMOF(*p);
         int ret = 1;
 
         if (mod == 3) {
@@ -780,9 +1204,9 @@ static int get_arg(word ip, const byte *p, dword *value, enum arg argtype, struc
         if (instr->addrsize == 32 && rm == 4) {
             /* SIB byte */
             p++;
-            instr->sib_scale = 1 << (*p >> 6);
-            instr->sib_index = (*p >> 3) & 7;
-            rm = *p & 7;
+            instr->sib_scale = 1 << MODOF(*p);
+            instr->sib_index = REGOF(*p);
+            rm = MEMOF(*p);
             ret++;
         }
 
@@ -823,12 +1247,18 @@ static int get_arg(word ip, const byte *p, dword *value, enum arg argtype, struc
     case CR32:
     case DR32:
     case TR32:
-        *value = (*p >> 3) & 7;
+    case MMX:
+    case XMM:
+        *value = REGOF(*p);
         return 0;
     case REG32:
     case STX:
-        *value = *p & 7;
+    case REGONLY:
+    case MMXONLY:
+    case XMMONLY:
+        *value = MEMOF(*p);
         return 1;
+    /* all others should be implicit */
     default:
         return 0;
     }
@@ -866,6 +1296,20 @@ static void get_reg16(char *out, byte reg, word is32) {
             strcat(out, "e");
         strcat(out, reg16[reg]);
     }
+}
+
+static void get_xmm(char *out, byte reg) {
+    if (asm_syntax == GAS)
+        strcat(out, "%");
+    strcat(out, "xmm0");
+    out[strlen(out)-1] = '0'+reg;
+}
+
+static void get_mmx(char *out, byte reg) {
+    if (asm_syntax == GAS)
+        strcat(out, "%");
+    strcat(out, "mm0");
+    out[strlen(out)-1] = '0'+reg;
 }
 
 static const char modrm16_gas[8][8] = {
@@ -1003,7 +1447,17 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
      * and we need to warn if we see a value there that isn't 0. */
     case RM:
     case MEM:
+    case MM:
+    case XM:
         if (instr->modrm_disp == DISP_REG) {
+            if (argtype == XM) {
+                get_xmm(out, instr->modrm_reg);
+                break;
+            } else if (argtype == MM) {
+                get_mmx(out, instr->modrm_reg);
+                break;
+            }
+
             if (argtype == MEM)
                 warn_at("ModRM byte has mod 3, but opcode only allows accessing memory.\n");
 
@@ -1143,6 +1597,7 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
         }
         break;
     case REG:
+    case REGONLY:
         if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) /* mov*x */
             get_reg8(out, value);
         else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF)
@@ -1199,37 +1654,15 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
         if (asm_syntax != NASM)
             strcat(out, ")");
         break;
+    case MMX:
+    case MMXONLY:
+        get_mmx(out, value);
+    case XMM:
+    case XMMONLY:
+        get_xmm(out, value);
+        break;
     default:
         break;
-    }
-}
-
-static int get_fpu_instr(const byte *p, struct op *op) {
-    byte opcode = *p;
-    byte nextcode = *(p+1);
-    byte subcode = (nextcode >> 3) & 7;
-    byte index = (opcode & 7)*8 + subcode;
-    unsigned i;
-    
-    if ((*(p+1) >> 6) < 3) {
-        if (instructions_fpu_m[index].name[0])
-            *op = instructions_fpu_m[index];
-        return 0;
-    } else {
-        if (instructions_fpu_r[index].name[0]) {
-            *op = instructions_fpu_r[index];
-            return 0;
-        } else {
-            /* try the single op list */
-            for (i=0; i<sizeof(instructions_fpu_single)/sizeof(*op); i++) {
-                if (opcode == instructions_fpu_single[i].opcode &&
-                    nextcode == instructions_fpu_single[i].subcode) {
-                    *op = instructions_fpu_single[i];
-                    break;
-                }
-            }
-        }
-        return 1;
     }
 }
 
@@ -1246,7 +1679,7 @@ static int get_fpu_instr(const byte *p, struct op *op) {
  * ensure they only get printed once), so we will need to watch out for
  * multiple prefixes, invalid instructions, etc.
  */
-int get_instr(word ip, const byte *p, struct instr *instr, int is32) {
+int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
     int len = 0;
     byte opcode;
     word prefix;
@@ -1270,7 +1703,7 @@ int get_instr(word ip, const byte *p, struct instr *instr, int is32) {
     if (instructions[opcode].name[0]) {
         instr->op = instructions[opcode];
     } else {
-        byte subcode = (p[len+1] >> 3) & 7;
+        byte subcode = REGOF(p[len+1]);
 
         /* do we have a member of an instruction group? */
         if (opcode == 0x0F) {
@@ -1278,16 +1711,17 @@ int get_instr(word ip, const byte *p, struct instr *instr, int is32) {
             
             len++;
             opcode = p[len];
-            subcode = (p[len+1] >> 3) & 7;
+            subcode = REGOF(p[len+1]);
             for (i=0; i<sizeof(instructions_0F)/sizeof(struct op); i++) {
-                if (opcode == instructions_0F[i].opcode &&
-                    (instructions_0F[i].subcode == 8 ||
-                     instructions_0F[i].subcode == subcode)) {
+                if (instr_matches(opcode, subcode, &instructions_0F[i])) {
                     instr->op = instructions_0F[i];
-                    instr->op.opcode = 0x0F00 | instr->op.opcode;
                     break;
                 }
             }
+            if (!instr->op.name[0]) {
+                get_sse_instr(p+len, instr);
+            }
+            instr->op.opcode = 0x0F00 | instr->op.opcode;
         } else if (opcode >= 0xD8 && opcode <= 0xDF) {
             len += get_fpu_instr(p+len, &instr->op);
         } else {
@@ -1370,10 +1804,10 @@ int get_instr(word ip, const byte *p, struct instr *instr, int is32) {
         strcpy(instr->op.name, "jecxz");
     else if (instr->op.opcode == 0xD4 && instr->arg0 == 10) {
         strcpy(instr->op.name, "aam");
-        instr->op.arg0 = 0;
+        instr->op.arg0 = NONE;
     } else if (instr->op.opcode == 0xD5 && instr->arg0 == 10) {
         strcpy(instr->op.name, "aad");
-        instr->op.arg0 = 0;
+        instr->op.arg0 = NONE;
     } else if (asm_syntax == GAS) {
         if (instr->op.flags & OP_FAR) {
             memmove(instr->op.name+1, instr->op.name, strlen(instr->op.name));
