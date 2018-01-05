@@ -1461,8 +1461,10 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
             if (argtype == MEM)
                 warn_at("ModRM byte has mod 3, but opcode only allows accessing memory.\n");
 
-            if (instr->op.size == 8)
+            if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) /* mov*b* */
                 get_reg8(out, instr->modrm_reg);
+            else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF) /* mov*w* */
+                get_reg16(out, instr->modrm_reg, 0);
             else
                 /* note: return a 16-bit register if the size is 0 */
                 get_reg16(out, instr->modrm_reg, (instr->op.size == 32));
@@ -1542,6 +1544,14 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
                 }
                 if (asm_syntax == MASM) /* && instr->op.size == 0? */
                     strcat(out, "ptr ");
+            } else if (instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) { /* mov*b* */
+                strcat(out,"byte ");
+                if (asm_syntax == MASM)
+                    strcat(out, "ptr ");
+            } else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF) { /* mov*w* */
+                strcat(out,"word ");
+                if (asm_syntax == MASM)
+                    strcat(out, "ptr ");
             }
 
             if (asm_syntax == NASM)
@@ -1598,10 +1608,8 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
         break;
     case REG:
     case REGONLY:
-        if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) /* mov*x */
+        if (instr->op.size == 8)
             get_reg8(out, value);
-        else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF)
-            get_reg16(out, value, 0);
         else
             /* note: return a 16-bit register if the size is 0 */
             get_reg16(out, value, (instr->op.size == 32));
