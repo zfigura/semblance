@@ -2076,6 +2076,9 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
             warn_at("repe prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
         out += sprintf(out, (instr->op.flags & OP_REPNE) ? "repe ": "rep ");
     }
+    if (instr->prefix & PREFIX_WAIT) {
+        out += sprintf(out, "wait ");
+    }
 
     out += sprintf(out, "%s", instr->op.name);
 
