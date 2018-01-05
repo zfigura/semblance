@@ -756,8 +756,6 @@ static const struct op instructions_sse[] = {
     {0x2E, 8,  0, "ucomiss",    XMM,    XM},
     {0x2F, 8,  0, "comiss",     XMM,    XM},
 
-    /* fixme: 38-3A */
-
     {0x50, 8,  0, "movmskps",   REGONLY,XMM},
     {0x51, 8,  0, "sqrtps",     XMM,    XM},
     {0x52, 8,  0, "rsqrtps",    XMM,    XM},
@@ -1062,6 +1060,116 @@ static const struct op instructions_sse_repe[] = {
     {0xE6, 8,  0, "cvtdq2pd",   XMM,    XM},
 };
 
+static const struct op instructions_sse_single[] = {
+    {0x38, 0x00, 0, "pshufb",       MMX,    MM},
+    {0x38, 0x01, 0, "phaddw",       MMX,    MM},
+    {0x38, 0x02, 0, "phaddd",       MMX,    MM},
+    {0x38, 0x03, 0, "phaddsw",      MMX,    MM},
+    {0x38, 0x04, 0, "pmaddubsw",    MMX,    MM},
+    {0x38, 0x05, 0, "phsubw",       MMX,    MM},
+    {0x38, 0x06, 0, "phsubd",       MMX,    MM},
+    {0x38, 0x07, 0, "phsubsw",      MMX,    MM},
+    {0x38, 0x08, 0, "psignb",       MMX,    MM},
+    {0x38, 0x09, 0, "psignw",       MMX,    MM},
+    {0x38, 0x0A, 0, "psignd",       MMX,    MM},
+    {0x38, 0x0B, 0, "pmulhrsw",     MMX,    MM},
+
+    {0x38, 0x1C, 0, "pabsb",        MMX,    MM},
+    {0x38, 0x1D, 0, "pabsw",        MMX,    MM},
+    {0x38, 0x1E, 0, "pabsd",        MMX,    MM},
+
+    {0x38, 0xF0,16, "movbe",        REG,    MEM},   /* not SSE */
+    {0x38, 0xF1,16, "movbe",        MEM,    REG},   /* not SSE */
+
+    {0x3A, 0x0F, 0, "palignr",      MMX,    MM},
+};
+
+static const struct op instructions_sse_single_op32[] = {
+    {0x38, 0x00, 0, "pshufb",       XMM,    XM},
+    {0x38, 0x01, 0, "phaddw",       XMM,    XM},
+    {0x38, 0x02, 0, "phaddd",       XMM,    XM},
+    {0x38, 0x03, 0, "phaddsw",      XMM,    XM},
+    {0x38, 0x04, 0, "pmaddubsw",    XMM,    XM},
+    {0x38, 0x05, 0, "phsubw",       XMM,    XM},
+    {0x38, 0x06, 0, "phsubd",       XMM,    XM},
+    {0x38, 0x07, 0, "phsubsw",      XMM,    XM},
+    {0x38, 0x08, 0, "psignb",       XMM,    XM},
+    {0x38, 0x09, 0, "psignw",       XMM,    XM},
+    {0x38, 0x0A, 0, "psignd",       XMM,    XM},
+    {0x38, 0x0B, 0, "pmulhrsw",     XMM,    XM},
+
+    {0x38, 0x10, 0, "pblendvb",     XMM,    XM},
+
+    {0x38, 0x14, 0, "blendvps",     XMM,    XM},
+    {0x38, 0x15, 0, "blendvpd",     XMM,    XM},
+
+    {0x38, 0x17, 0, "ptest",        XMM,    XM},
+
+    {0x38, 0x1C, 0, "pabsb",        XMM,    XM},
+    {0x38, 0x1D, 0, "pabsw",        XMM,    XM},
+    {0x38, 0x1E, 0, "pabsd",        XMM,    XM},
+
+    {0x38, 0x20, 0, "pmovsxbw",     XMM,    XM},
+    {0x38, 0x21, 0, "pmovsxbd",     XMM,    XM},
+    {0x38, 0x22, 0, "pmovsxbq",     XMM,    XM},
+    {0x38, 0x23, 0, "pmovsxwd",     XMM,    XM},
+    {0x38, 0x24, 0, "pmovsxwq",     XMM,    XM},
+    {0x38, 0x25, 0, "pmovsxdq",     XMM,    XM},
+
+    {0x38, 0x28, 0, "pmuldq",       XMM,    XM},
+    {0x38, 0x29, 0, "pcmpeqq",      XMM,    XM},
+    {0x38, 0x2A, 0, "movntdqa",     XMM,    MEM},
+    {0x38, 0x2B, 0, "packusdw",     XMM,    XM},
+
+    {0x38, 0x30, 0, "pmovzxbw",     XMM,    XM},
+    {0x38, 0x31, 0, "pmovzxbd",     XMM,    XM},
+    {0x38, 0x32, 0, "pmovzxbq",     XMM,    XM},
+    {0x38, 0x33, 0, "pmovzxwd",     XMM,    XM},
+    {0x38, 0x34, 0, "pmovzxwq",     XMM,    XM},
+    {0x38, 0x35, 0, "pmovzxdq",     XMM,    XM},
+
+    {0x38, 0x37, 0, "pcmpgtq",      XMM,    XM},
+    {0x38, 0x38, 0, "pminsb",       XMM,    XM},
+    {0x38, 0x39, 0, "pminsd",       XMM,    XM},
+    {0x38, 0x3A, 0, "pminuw",       XMM,    XM},
+    {0x38, 0x3B, 0, "pminud",       XMM,    XM},
+    {0x38, 0x3C, 0, "pmaxsb",       XMM,    XM},
+    {0x38, 0x3D, 0, "pmaxsd",       XMM,    XM},
+    {0x38, 0x3E, 0, "pmaxuw",       XMM,    XM},
+    {0x38, 0x3F, 0, "pmaxud",       XMM,    XM},
+    {0x38, 0x40, 0, "pmaxlld",      XMM,    XM},
+    {0x38, 0x41, 0, "phminposuw",   XMM,    XM},
+
+    {0x3A, 0x08, 0, "roundps",      XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x09, 0, "roundpd",      XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x0A, 0, "roundss",      XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x0B, 0, "roundsd",      XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x0C, 0, "blendps",      XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x0D, 0, "blendpd",      XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x0E, 0, "pblendw",      XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x0F, 0, "palignr",      XMM,    XM},
+
+    {0x3A, 0x14, 0, "pextrb",       RM,     XMM,    OP_ARG2_IMM8},
+    {0x3A, 0x15, 0, "pextrw",       RM,     XMM,    OP_ARG2_IMM8},
+    {0x3A, 0x16, 0, "pextrd",       RM,     XMM,    OP_ARG2_IMM8},
+    {0x3A, 0x17, 0, "extractps",    RM,     XMM,    OP_ARG2_IMM8},
+
+    {0x3A, 0x20, 0, "pinsrb",       XMM,    RM,     OP_ARG2_IMM8},
+    {0x3A, 0x21, 0, "insertps",     XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x22, 0, "pinsrd",       XMM,    RM,     OP_ARG2_IMM8},
+
+    {0x3A, 0x40, 0, "dpps",         XMM,    XM},
+    {0x3A, 0x41, 0, "dppd",         XMM,    XM},
+    {0x3A, 0x42, 0, "mpsqdbw",      XMM,    XM,     OP_ARG2_IMM8},
+
+    {0x3A, 0x44, 0, "pclmulqdq",    XMM,    XM,     OP_ARG2_IMM8},
+
+    {0x3A, 0x60, 0, "pcmpestrm",    XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x61, 0, "pcmpestri",    XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x62, 0, "pcmpistrm",    XMM,    XM,     OP_ARG2_IMM8},
+    {0x3A, 0x63, 0, "pcmpistri",    XMM,    XM,     OP_ARG2_IMM8},
+};
+
 /* returns the flag if it's a prefix, 0 otherwise */
 static word get_prefix(word opcode) {
     switch(opcode) {
@@ -1085,7 +1193,7 @@ static int instr_matches(const byte opcode, const byte subcode, const struct op 
     return ((opcode == op->opcode) && ((op->subcode == 8) || (subcode == op->subcode)));
 }
 
-static void get_sse_instr(const byte *p, struct instr *instr) {
+static int get_sse_instr(const byte *p, struct instr *instr) {
     byte subcode = REGOF(p[1]);
     unsigned i;
 
@@ -1098,7 +1206,15 @@ static void get_sse_instr(const byte *p, struct instr *instr) {
             if (instr_matches(p[0], subcode, &instructions_sse_op32[i])) {
                 instr->op = instructions_sse_op32[i];
                 instr->prefix &= ~PREFIX_OP32;
-                return;
+                return 0;
+            }
+        }
+        for (i = 0; i < sizeof(instructions_sse_single_op32)/sizeof(struct op); i++) {
+            if (instructions_sse_single_op32[i].opcode == p[0] &&
+                instructions_sse_single_op32[i].subcode == p[1]) {
+                instr->op = instructions_sse_single_op32[i];
+                instr->prefix &= ~PREFIX_OP32;
+                return 1;
             }
         }
     } else if (instr->prefix & PREFIX_REPNE) {
@@ -1106,7 +1222,7 @@ static void get_sse_instr(const byte *p, struct instr *instr) {
             if (instr_matches(p[0], subcode, &instructions_sse_repne[i])) {
                 instr->op = instructions_sse_repne[i];
                 instr->prefix &= ~PREFIX_REPNE;
-                return;
+                return 0;
             }
         }
     } else if (instr->prefix & PREFIX_REPE) {
@@ -1114,14 +1230,21 @@ static void get_sse_instr(const byte *p, struct instr *instr) {
             if (instr_matches(p[0], subcode, &instructions_sse_repe[i])) {
                 instr->op = instructions_sse_repe[i];
                 instr->prefix &= ~PREFIX_REPE;
-                return;
+                return 0;
             }
         }
     } else {
         for (i = 0; i < sizeof(instructions_sse)/sizeof(struct op); i++) {
             if (instr_matches(p[0], subcode, &instructions_sse[i])) {
                 instr->op = instructions_sse[i];
-                return;
+                return 0;
+            }
+        }
+        for (i = 0; i < sizeof(instructions_sse_single)/sizeof(struct op); i++) {
+            if (instructions_sse_single[i].opcode == p[0] &&
+                instructions_sse_single[i].subcode == p[1]) {
+                instr->op = instructions_sse_single[i];
+                return 1;
             }
         }
     }
@@ -1734,7 +1857,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
                 }
             }
             if (!instr->op.name[0]) {
-                get_sse_instr(p+len, instr);
+                len += get_sse_instr(p+len, instr);
             }
             instr->op.opcode = 0x0F00 | instr->op.opcode;
         } else if (opcode >= 0xD8 && opcode <= 0xDF) {
