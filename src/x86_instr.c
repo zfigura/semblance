@@ -790,14 +790,14 @@ static const struct op instructions_sse[] = {
     {0x6E, 8,  0, "movd",       MMX,    RM},
     {0x6F, 8,  0, "movq",       MMX,    MM},
     {0x70, 8,  0, "pshufw",     MMX,    MM,     OP_ARG2_IMM8},
-    {0x71, 2,  0, "psrlw",      MMX,    IMM8},  /* fixme: make sure this works */
-    {0x71, 4,  0, "psraw",      MMX,    IMM8},
-    {0x71, 6,  0, "psllw",      MMX,    IMM8},
-    {0x72, 2,  0, "psrld",      MMX,    IMM8},
-    {0x72, 4,  0, "psrad",      MMX,    IMM8},
-    {0x72, 6,  0, "pslld",      MMX,    IMM8},
-    {0x73, 2,  0, "psrlq",      MMX,    IMM8},
-    {0x73, 6,  0, "psllq",      MMX,    IMM8},
+    {0x71, 2,  0, "psrlw",      MMXONLY,IMM8},  /* fixme: make sure this works */
+    {0x71, 4,  0, "psraw",      MMXONLY,IMM8},
+    {0x71, 6,  0, "psllw",      MMXONLY,IMM8},
+    {0x72, 2,  0, "psrld",      MMXONLY,IMM8},
+    {0x72, 4,  0, "psrad",      MMXONLY,IMM8},
+    {0x72, 6,  0, "pslld",      MMXONLY,IMM8},
+    {0x73, 2,  0, "psrlq",      MMXONLY,IMM8},
+    {0x73, 6,  0, "psllq",      MMXONLY,IMM8},
     {0x74, 8,  0, "pcmpeqb",    MMX,    MM},
     {0x75, 8,  0, "pcmpeqw",    MMX,    MM},
     {0x76, 8,  0, "pcmpeqd",    MMX,    MM},
@@ -815,7 +815,7 @@ static const struct op instructions_sse[] = {
     {0xD1, 8,  0, "psrlw",      MMX,    MM},
     {0xD2, 8,  0, "psrld",      MMX,    MM},
     {0xD3, 8,  0, "psrlq",      MMX,    MM},
-    {0xD4, 8,  0, "paddd",      MMX,    MM},
+    {0xD4, 8,  0, "paddq",      MMX,    MM},
     {0xD5, 8,  0, "pmullw",     MMX,    MM},
     /* D6 unused */
     {0xD7, 8,  0, "pmovmskb",   REGONLY,MMX},
@@ -1063,7 +1063,7 @@ static const struct op instructions_sse_repe[] = {
 };
 
 /* returns the flag if it's a prefix, 0 otherwise */
-static word get_prefix(byte opcode) {
+static word get_prefix(word opcode) {
     switch(opcode) {
     case 0x26: return PREFIX_ES;
     case 0x2E: return PREFIX_CS;
@@ -1657,6 +1657,7 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
     case MMX:
     case MMXONLY:
         get_mmx(out, value);
+        break;
     case XMM:
     case XMMONLY:
         get_xmm(out, value);
@@ -1691,7 +1692,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
         if (((instr->prefix & PREFIX_SEG_MASK) && (prefix & PREFIX_SEG_MASK)) ||
             (instr->prefix & prefix)) {
             instr->op = instructions[p[len]];
-            return len+1;
+            return len;
         }
         instr->prefix |= prefix;
         len++;
@@ -1867,6 +1868,7 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
                     seg16[(instr->prefix & PREFIX_SEG_MASK)-1], instr->op.name);
         else
             warn_at("Prefix specified twice: %s. Skipping to next instruction.\n", instr->op.name);
+        instr->op.name[0] = 0;
     }
 
     /* check that the instruction exists */
