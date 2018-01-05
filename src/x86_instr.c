@@ -1695,19 +1695,19 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
             if (asm_syntax == MASM)
                 strcat(out, "[");
 
-            if (has_sib) {
-                get_reg16(out, instr->sib_index, 1);
-                strcat(out, "*0");
-                out[strlen(out)-1] = '0'+instr->sib_scale;
-            }
-
             if (instr->modrm_reg < 8) {
-                if (has_sib)
-                    strcat(out, "+");
                 if (instr->addrsize == 16)
                     strcat(out, modrm16_masm[instr->modrm_reg]);
                 else
                     get_reg16(out, instr->modrm_reg, 1);
+                if (has_sib)
+                    strcat(out, "+");
+            }
+
+            if (has_sib) {
+                get_reg16(out, instr->sib_index, 1);
+                strcat(out, "*0");
+                out[strlen(out)-1] = '0'+instr->sib_scale;
             }
 
             if (instr->modrm_disp == DISP_8) {
