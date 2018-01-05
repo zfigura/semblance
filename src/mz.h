@@ -44,6 +44,12 @@ struct mz {
     struct header_mz header;
 
     struct reloc *reltab;
+
+    /* code */
+    dword entry_point;
+    byte *flags;
+    dword start;
+    dword length;
 };
 
 extern void readmz(struct mz *mz);
