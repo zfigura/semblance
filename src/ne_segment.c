@@ -237,7 +237,6 @@ static void print_data(const struct segment *seg) {
         }
         putchar('\n');
     }
-    putchar('\n');
 }
 
 static void scan_segment(word cs, word ip, struct ne *ne) {
@@ -554,6 +553,7 @@ void print_segments(struct ne *ne) {
     for (cs = 1; cs <= ne->header.ne_cseg; cs++) {
         seg = &ne->segments[cs-1];
 
+        putchar('\n');
         printf("Segment %d (start = 0x%lx, length = 0x%x, minimum allocation = 0x%x):\n",
             cs, seg->start, seg->length, seg->min_alloc ? seg->min_alloc : 65536);
         print_segment_flags(seg->flags);

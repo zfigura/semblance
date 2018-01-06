@@ -91,8 +91,12 @@ static const char *const subsystems[] = {
 };
 
 static void print_header(struct header_pe *header) {
-    if (!header->file.SizeOfOptionalHeader) return;  /* 14 */
-    else if (header->file.SizeOfOptionalHeader < sizeof(struct optional_header))
+    putchar('\n');
+
+    if (!header->file.SizeOfOptionalHeader) {
+        printf("No optional header\n");
+        return;
+    } else if (header->file.SizeOfOptionalHeader < sizeof(struct optional_header))
         warn("Size of optional header is %u (expected at least %lu).\n",
             header->file.SizeOfOptionalHeader, sizeof(struct optional_header));
 
@@ -138,7 +142,6 @@ static void print_header(struct header_pe *header) {
 
     if (header->opt.LoaderFlags != 0)
         warn("LoaderFlags is 0x%x (expected 0)\n", header->opt.LoaderFlags); /* 70 */
-    putchar('\n');
 }
 
 struct export_header {
@@ -322,16 +325,17 @@ void dumppe(long offset_pe) {
         print_header(&pe.header);
 
     if (mode & DUMPEXPORT) {
+        putchar('\n');
         if (pe.exports) {
             printf("Exports:\n");
             for (i = 0; i < pe.export_count; i++)
                 printf("\t%5d\t%#8x\t%s\n", pe.exports[i].ordinal, pe.exports[i].address, pe.exports[i].name);
         } else
             printf("No export table\n");
-        putchar('\n');
     }
 
     if (mode & DUMPIMPORTMOD) {
+        putchar('\n');
         if (pe.imports) {
             printf("Imported modules:\n");
             for (i = 0; i < pe.import_count; i++)

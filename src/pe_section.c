@@ -298,6 +298,7 @@ void print_sections(struct pe *pe) {
     for (i = 0; i < pe->header.file.NumberOfSections; i++) {
         sec = &pe->sections[i];
 
+        putchar('\n');
         printf("Section %s (start = 0x%x, length = 0x%x, minimum allocation = 0x%x):\n",
             sec->name, sec->offset, sec->length, sec->min_alloc);
         printf("    Address: %x\n", sec->address);

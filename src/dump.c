@@ -29,8 +29,6 @@ static void dump_file(char *file){
     word magic;
     long offset = 0;
 
-    fprintf(stderr, "%s\n", file);
-
     f = fopen(file, "r");
     if (!f) {
         perror("Cannot open %s");
@@ -224,4 +222,6 @@ int main(int argc, char *argv[]){
         if (optind < argc)
             printf("\n\n");
     }
+
+    return 0;
 }

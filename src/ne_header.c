@@ -91,6 +91,7 @@ static void print_header(struct header_ne *header){
      * 3a - offset to segment ref. bytes (same)
      */
 
+    putchar('\n');
     printf("Linker version: %d.%d\n", header->ne_ver, header->ne_rev); /* 02 */
     printf("Checksum: %08x\n", header->ne_crc); /* 08 */
     print_flags(header->ne_flags); /* 0c */
@@ -109,7 +110,6 @@ static void print_header(struct header_ne *header){
     printf("Swap area: %d\n", header->ne_swaparea); /* 3c */
     printf("Expected Windows version: %d.%d\n", /* 3e */
            header->ne_expver_maj, header->ne_expver_min);
-    printf("\n");
 }
 
 static void print_export(struct ne *ne) {
@@ -545,21 +545,22 @@ void dumpne(long offset_ne) {
 
     printf("Module type: NE (New Executable)\n");
     printf("Module name: %s\n", ne.name);
-    printf("Module description: %s\n\n", ne.description);
+    printf("Module description: %s\n", ne.description);
 
     if (mode & DUMPHEADER)
         print_header(&ne.header);
 
     if (mode & DUMPEXPORT) {
+        putchar('\n');
         printf("Exports:\n");
         print_export(&ne);
     }
 
     if (mode & DUMPIMPORTMOD) {
+        putchar('\n');
         printf("Imported modules:\n");
         for (i = 0; i < ne.header.ne_cmod; i++)
             printf("\t%s\n", ne.imptab[i].name);
-        putchar('\n');
     }
 
     if (mode & DISASSEMBLE)

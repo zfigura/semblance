@@ -1064,7 +1064,9 @@ void print_rsrc(long start){
             /* if a specific type (and id) was requested, filter for it */
             if (resource_count && !filter_resource(type_id, rn.id))
                 continue;
-            
+
+            putchar('\n');
+
             /* print resource type */
             if (type_id & 0x8000){
                 if ((type_id & (~0x8000)) < rsrc_types_count && rsrc_types[type_id & (~0x8000)])

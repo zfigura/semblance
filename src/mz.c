@@ -30,12 +30,12 @@
 #pragma pack(1)
 
 static void print_header(struct header_mz *header) {
+    putchar('\n');
     printf("Minimum extra allocation: %d bytes\n", header->e_minalloc * 16); /* 0a */
     printf("Maximum extra allocation: %d bytes\n", header->e_maxalloc * 16); /* 0c */
     printf("Initial stack location: %#x\n", realaddr(header->e_ss, header->e_sp)); /* 0e */
     printf("Program entry point: %#x\n", realaddr(header->e_cs, header->e_ip)); /* 14 */
     printf("Overlay number: %d\n", header->e_ovno); /* 1a */
-    printf("\n");
 }
 
 #ifdef USE_WARN
@@ -68,6 +68,9 @@ static void print_code(struct mz *mz) {
     dword ip = 0;
     byte buffer[MAX_INSTR];
     char out[256];
+
+    putchar('\n');
+    printf("Code (start = 0x%x, length = 0x%x):\n", mz->start, mz->length);
 
     while (ip < mz->length) {
         fseek(f, mz->start + ip, SEEK_SET);
