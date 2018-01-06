@@ -84,7 +84,6 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     char arg0[32] = "", arg1[32] = "";
     unsigned len;
 
-    unsigned i;
     char *comment = NULL;
     char ip_string[9];
 

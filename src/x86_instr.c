@@ -1248,6 +1248,8 @@ static int get_sse_instr(const byte *p, struct instr *instr) {
             }
         }
     }
+
+    return 0;
 }
 
 /* Parameters:

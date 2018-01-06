@@ -179,7 +179,7 @@ static char *fstrdup(long offset) {
 static void get_export_table(struct pe *pe) {
     struct export_header header;
     long offset = addr2offset(pe->dirs[0].address, pe);
-    int len, i;
+    int i;
 
     /* More headers. It's like a PE file is nothing but headers.
      * Do we really need to print any of this? No, not really. Just use the data. */
@@ -239,7 +239,7 @@ static void get_import_name_table(struct import_module *module, struct pe *pe) {
 
 static void get_import_module_table(struct pe *pe) {
     long offset = addr2offset(pe->dirs[1].address, pe);
-    int i, j;
+    int i;
 
     fseek(f, offset, SEEK_SET);
     pe->import_count = 0;
