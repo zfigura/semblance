@@ -95,10 +95,7 @@ static void print_code(struct mz *mz) {
          * unabashedly mix code and data, so we need to figure out a solution
          * for that. but we needed to do that anyway. */
 
-        if (mz->length-ip < sizeof(buffer))
-            fread(buffer, 1, mz->length-ip, f);
-        else
-            fread(buffer, 1, sizeof(buffer), f);
+        fread(buffer, 1, min(sizeof(buffer), mz->length-ip), f);
 
         if (mz->flags[ip] & INSTR_FUNC) {
             printf("\n");
@@ -131,16 +128,14 @@ static void scan_segment(dword ip, struct mz *mz) {
         /* read the instruction */
         fseek(f, mz->start+ip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));  // fixme
-        if (mz->length-ip < sizeof(buffer))
-            fread(buffer, 1, mz->length-ip, f);
-        else
-            fread(buffer, 1, sizeof(buffer), f);
+        fread(buffer, 1, min(sizeof(buffer), mz->length-ip), f);
         instr_length = get_instr(ip, buffer, &instr, 0);
 
         /* mark the bytes */
         mz->flags[ip] |= INSTR_VALID;
         for (i = ip; i < ip+instr_length && i < mz->length; i++) mz->flags[i] |= INSTR_SCANNED;
 
+        /* instruction which hangs over the minimum allocation */
         if (i < ip+instr_length && i == mz->length) break;
 
         /* handle conditional and unconditional jumps */

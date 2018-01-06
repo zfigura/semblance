@@ -36,7 +36,7 @@
 #define warn_at(...)
 #endif
 
-/* index_function */
+/* index function */
 static char *get_entry_name(word cs, word ip, const struct ne *ne) {
     unsigned i;
     for (i=0; i<ne->entcount; i++) {
@@ -193,10 +193,8 @@ static void print_disassembly(const struct segment *seg, const struct ne *ne) {
         /* Instructions can "hang over" the end of a segment.
          * Zero should be supplied. */
         memset(buffer, 0, sizeof(buffer));
-        if ((unsigned) seg->length-ip < sizeof(buffer))
-            fread(buffer, 1, seg->length-ip, f);
-        else
-            fread(buffer, 1, sizeof(buffer), f);
+
+        fread(buffer, 1, min(sizeof(buffer), seg->length - ip), f);
 
         if (seg->instr_flags[ip] & INSTR_FUNC) {
             char *name = get_entry_name(cs, ip, ne);
@@ -265,16 +263,14 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
         /* read the instruction */
         fseek(f, seg->start+ip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));
-        if ((unsigned) seg->length-ip < sizeof(buffer))
-            fread(buffer, 1, seg->length-ip, f);
-        else
-            fread(buffer, 1, sizeof(buffer), f);
+        fread(buffer, 1, min(sizeof(buffer), seg->length-ip), f);
         instr_length = get_instr(ip, buffer, &instr, seg->flags & 0x2000);
 
         /* mark the bytes */
         seg->instr_flags[ip] |= INSTR_VALID;
         for (i = ip; i < ip+instr_length && i < seg->min_alloc; i++) seg->instr_flags[i] |= INSTR_SCANNED;
 
+        /* instruction which hangs over the minimum allocation */
         if (i < ip+instr_length && i == seg->min_alloc) break;
 
         /* handle conditional and unconditional jumps */
@@ -339,35 +335,23 @@ static void print_segment_flags(word flags) {
         strcpy(buffer, "code");
 
     /* I think these three should never occur in a file */
-    if (flags & 0x0002)
-        strcat(buffer, ", allocated");
-    if (flags & 0x0004)
-        strcat(buffer, ", loaded");
-    if (flags & 0x0008)
-        strcat(buffer, ", iterated");
+    if (flags & 0x0002) strcat(buffer, ", allocated");
+    if (flags & 0x0004) strcat(buffer, ", loaded");
+    if (flags & 0x0008) strcat(buffer, ", iterated");
         
-    if (flags & 0x0010)
-        strcat(buffer, ", moveable");
-    if (flags & 0x0020)
-        strcat(buffer, ", shareable");
-    if (flags & 0x0040)
-        strcat(buffer, ", preload");
-    if (flags & 0x0080)
-        strcat(buffer, (flags & 0x0001) ? ", read-only" : ", execute-only");
-    if (flags & 0x0100)
-        strcat(buffer, ", has relocation data");
+    if (flags & 0x0010) strcat(buffer, ", moveable");
+    if (flags & 0x0020) strcat(buffer, ", shareable");
+    if (flags & 0x0040) strcat(buffer, ", preload");
+    if (flags & 0x0080) strcat(buffer, (flags & 0x0001) ? ", read-only" : ", execute-only");
+    if (flags & 0x0100) strcat(buffer, ", has relocation data");
 
     /* there's still an unidentified flag 0x0400 which appears in all of my testcases.
      * but WINE doesn't know what it is, so... */
-    if (flags & 0x0800)
-        strcat(buffer, ", self-loading");
-    if (flags & 0x1000)
-        strcat(buffer, ", discardable");
-    if (flags & 0x2000)
-        strcat(buffer, ", 32-bit");
+    if (flags & 0x0800) strcat(buffer, ", self-loading");
+    if (flags & 0x1000) strcat(buffer, ", discardable");
+    if (flags & 0x2000) strcat(buffer, ", 32-bit");
 
-    if (flags & 0xc608)
-        sprintf(buffer+strlen(buffer), ", (unknown flags 0x%04x)", flags & 0xc608);
+    if (flags & 0xc608) sprintf(buffer+strlen(buffer), ", (unknown flags 0x%04x)", flags & 0xc608);
     printf("    Flags: 0x%04x (%s)\n", flags, buffer);
 }
 

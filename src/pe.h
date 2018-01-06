@@ -69,16 +69,17 @@ struct section {
     char  name[8];          /* 00 */
     dword min_alloc;        /* 08 */
     dword address;          /* 0c */
-    dword size;             /* 10 */
+    dword length;           /* 10 */
     dword offset;           /* 14 */
     dword reloc_offset;     /* 18 */
     dword lineno_offset;    /* 1c */
     word  reloc_count;      /* 20 */
     word  lineno_count;     /* 22 */
     dword flags;            /* 24 */
-};
 
-STATIC_ASSERT(sizeof(struct section) == 0x28);
+    /* and our data: */
+    byte *instr_flags;
+};
 
 #pragma pack()
 
@@ -86,6 +87,13 @@ struct export {
     dword address;
     word ordinal;
     char *name;
+};
+
+struct import_module {
+    char *module;
+    dword nametab_addr;
+    char **nametab;
+    unsigned count;
 };
 
 struct pe {
@@ -98,6 +106,15 @@ struct pe {
 
     struct export *exports;
     unsigned export_count;
+
+    struct import_module *imports;
+    unsigned import_count;
 };
+
+/* in pe_section.c */
+extern struct section *addr2section(dword addr, const struct pe *pe);
+extern long addr2offset(dword addr, const struct pe *pe);
+extern void read_sections(struct pe *pe);
+extern void print_sections(struct pe *pe);
 
 #endif /* __PE_H */

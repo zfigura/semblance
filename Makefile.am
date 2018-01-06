@@ -9,6 +9,7 @@ dump_SOURCES = \
 	src/ne_segment.c \
 	src/ne.h \
 	src/pe_header.c \
+	src/pe_section.c \
 	src/pe.h \
 	src/semblance.h \
 	src/x86_instr.c \

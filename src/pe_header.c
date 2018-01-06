@@ -45,7 +45,7 @@ static void print_flags(word flags) {
     if (flags & 0x2000) strcat(buffer, ", DLL");
     if (flags & 0x4000) strcat(buffer, ", uniprocessor");
     if (flags & 0x8000) strcat(buffer, ", big-endian");
-    
+
     printf("Flags: 0x%04x (%s)\n", flags, buffer+2);
 }
 
@@ -141,29 +141,6 @@ static void print_header(struct header_pe *header) {
     putchar('\n');
 }
 
-static struct section *addr2section(dword addr, const struct pe *pe) {
-    /* Even worse than the below, some data is sensitive to which section it's in! */
-
-    int i;
-    for (i = 0; i < pe->header.file.NumberOfSections; i++) {
-         if (addr >= pe->sections[i].address && addr < pe->sections[i].address + pe->sections[i].size)
-            return &pe->sections[i];
-    }
-
-    return NULL;
-}
-
-static long addr2offset(dword addr, const struct pe *pe) {
-    /* Everything inside a PE file is built so that the file is read while it's
-     * already loaded. Offsets aren't file offsets, they're *memory* offsets.
-     * We don't want to load the whole file, so we have to search through each
-     * section to figure out where in the *file* a virtual address points. */
-
-    struct section *section = addr2section(addr, pe);
-    if (!section) return 0;
-    return addr - section->address + section->offset;
-}
-
 struct export_header {
     dword flags;            /* 00 */
     dword timestamp;        /* 04 */
@@ -191,8 +168,8 @@ static char *fstrdup(long offset) {
     fseek(f, offset, SEEK_SET);
     ret = malloc(len);
     fread(ret, sizeof(char), len, f);
-    fseek(f, cursor, SEEK_SET);
 
+    fseek(f, cursor, SEEK_SET);
     return ret;
 }
 
@@ -210,7 +187,7 @@ static void get_export_table(struct pe *pe) {
     pe->name = fstrdup(addr2offset(header.module_name_addr, pe));
 
     if (header.addr_table_count != header.export_count)
-        warn("Export address table count %d does not mach export count %d\n",
+        warn("Export address table count %d does not match export count %d\n",
             header.addr_table_count, header.export_count);
 
     /* Grab the exports. */
@@ -218,7 +195,7 @@ static void get_export_table(struct pe *pe) {
 
     fseek(f, addr2offset(header.addr_table_addr, pe), SEEK_SET);
     for (i=0; i<header.addr_table_count; i++)
-        pe->exports[i].address = addr2offset(read_dword(), pe);
+        pe->exports[i].address = read_dword();
 
     fseek(f, addr2offset(header.name_table_addr, pe), SEEK_SET);
     for (i=0; i<header.export_count; i++)
@@ -231,8 +208,61 @@ static void get_export_table(struct pe *pe) {
     pe->export_count = header.export_count;
 }
 
+static void get_import_name_table(struct import_module *module, struct pe *pe) {
+    long offset = addr2offset(module->nametab_addr, pe);
+    long cursor = ftell(f);
+    unsigned i, count;
+
+    fseek(f, offset, SEEK_SET);
+    count = 0;
+    while (read_dword()) count++;
+
+    module->nametab = malloc(count * sizeof(char *));
+
+    fseek(f, offset, SEEK_SET);
+    for (i = 0; i < count; i++) {
+        dword address = read_dword();
+        if (address & 0x80000000) {
+            address &= 0x7fffffff;
+            module->nametab[i] = malloc(snprintf(NULL, 0, "%u", address));
+            sprintf(module->nametab[i], "%u", address);
+        } else
+            module->nametab[i] = fstrdup(addr2offset(address, pe) + 2); /* skip hint */
+    }
+    module->count = count;
+
+    fseek(f, cursor, SEEK_SET);
+}
+
+static void get_import_module_table(struct pe *pe) {
+    long offset = addr2offset(pe->dirs[1].address, pe);
+    int i, j;
+
+    fseek(f, offset, SEEK_SET);
+    pe->import_count = 0;
+    while (read_dword()) {
+        fseek(f, 4 * sizeof(dword), SEEK_CUR);
+        pe->import_count++;
+    }
+
+    pe->imports = malloc(pe->import_count * sizeof(struct import_module));
+
+    fseek(f, offset, SEEK_SET);
+
+    for (i = 0; i < pe->import_count; i++) {
+
+        fseek(f, 3 * sizeof(dword), SEEK_CUR);
+        pe->imports[i].module = fstrdup(addr2offset(read_dword(), pe));
+        pe->imports[i].nametab_addr = read_dword();
+
+        /* grab the imports themselves */
+        get_import_name_table(&pe->imports[i], pe);
+    }
+}
+
 void readpe(long offset_pe, struct pe *pe) {
     struct optional_header *opt = &pe->header.opt;
+    int i;
 
     fseek(f, offset_pe, SEEK_SET);
     fread(&pe->header, sizeof(struct header_pe), 1, f);
@@ -242,21 +272,36 @@ void readpe(long offset_pe, struct pe *pe) {
 
     /* read the section table */
     pe->sections = malloc(pe->header.file.NumberOfSections * sizeof(struct section));
-    fread(pe->sections, sizeof(struct section), pe->header.file.NumberOfSections, f);
+    for (i = 0; i < pe->header.file.NumberOfSections; i++) {
+        fread(&pe->sections[i], 0x28, 1, f);
+
+        /* allocate zeroes, but only if it's a code section */
+        if (pe->sections[i].flags & 0x20)
+            pe->sections[i].instr_flags = calloc(pe->sections[i].min_alloc, sizeof(byte));
+        else
+            pe->sections[i].instr_flags = NULL;
+    }
 
     /* Read the Data Directories.
      * PE is bizarre. It tries to make all of these things generic by putting
      * them in separate "directories". But the order of these seems to be fixed
      * anyway, so why bother? */
 
-    if (pe->header.opt.NumberOfRvaAndSizes >= 1 && pe->dirs[0].size)
+    if (opt->NumberOfRvaAndSizes >= 1 && pe->dirs[0].size)
         get_export_table(pe);
+    if (opt->NumberOfRvaAndSizes >= 2 && pe->dirs[1].size)
+        get_import_module_table(pe);
+
+    /* Read the code. */
+    read_sections(pe);
 }
 
 void freepe(struct pe *pe) {
     int i;
 
     free(pe->dirs);
+    for (i = 0; i < pe->header.file.NumberOfSections; i++)
+        free(pe->sections[i].instr_flags);
     free(pe->sections);
     free(pe->name);
     for (i = 0; i < pe->export_count; i++)
@@ -265,14 +310,13 @@ void freepe(struct pe *pe) {
 }
 
 void dumppe(long offset_pe) {
-    struct pe pe;
-    char *module_name;
+    struct pe pe = {0};
     int i;
 
     readpe(offset_pe, &pe);
 
     printf("Module type: PE (Portable Executable)\n");
-    if (module_name) printf("Module name: %s\n", module_name);
+    if (pe.name) printf("Module name: %s\n", pe.name);
 
     if (mode & DUMPHEADER)
         print_header(&pe.header);
@@ -281,11 +325,23 @@ void dumppe(long offset_pe) {
         if (pe.exports) {
             printf("Exports:\n");
             for (i = 0; i < pe.export_count; i++)
-                printf("\t%5d\t%#8x\t%s\n", pe.exports[i].ordinal, pe.header.opt.ImageBase + pe.exports[i].address, pe.exports[i].name);
+                printf("\t%5d\t%#8x\t%s\n", pe.exports[i].ordinal, pe.exports[i].address, pe.exports[i].name);
         } else
             printf("No export table\n");
         putchar('\n');
     }
+
+    if (mode & DUMPIMPORTMOD) {
+        if (pe.imports) {
+            printf("Imported modules:\n");
+            for (i = 0; i < pe.import_count; i++)
+                printf("\t%s\n", pe.imports[i].module);
+        } else
+            printf("No imported module table\n");
+    }
+
+    if (mode & DISASSEMBLE)
+        print_sections(&pe);
 
     freepe(&pe);
 }
