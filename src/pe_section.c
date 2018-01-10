@@ -283,11 +283,18 @@ void read_sections(struct pe *pe) {
     /* todo: relocations */
 
     for (i = 0; i < pe->export_count; i++) {
+        dword address = pe->exports[i].address;
+        struct section *sec = addr2section(address, pe);
+        sec->instr_flags[address - sec->address] |= INSTR_FUNC;
         scan_segment(pe->exports[i].address, pe);
     }
 
-    if (!(pe->header.file.Characteristics & 0x2000))
-        scan_segment(pe->header.opt.AddressOfEntryPoint, pe);
+    if (!(pe->header.file.Characteristics & 0x2000)) {
+        dword entry_point = pe->header.opt.AddressOfEntryPoint;
+        struct section *sec = addr2section(entry_point, pe);
+        sec->instr_flags[entry_point - sec->address] |= INSTR_FUNC;
+        scan_segment(entry_point, pe);
+    }
 }
 
 void print_sections(struct pe *pe) {
