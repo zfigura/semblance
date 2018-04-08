@@ -179,8 +179,8 @@ static void print_disassembly(const struct segment *seg, const struct ne *ne) {
                 if (read_byte() == 0) {
                     printf("     ...\n");
                     ip++;
+                    while (read_byte() == 0) ip++;
                 }
-                while (read_byte() == 0) ip++;
             } else {
                 printf("     ...\n");
                 while ((ip < seg->length) && !(seg->instr_flags[ip] & INSTR_VALID)) ip++;

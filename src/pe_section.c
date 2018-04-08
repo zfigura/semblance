@@ -140,8 +140,8 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
                 if (read_byte() == 0) {
                     printf("     ...\n");
                     relip++;
+                    while (read_byte() == 0) relip++;
                 }
-                while (read_byte() == 0) relip++;
             } else {
                 printf("     ...\n");
                 while ((relip < sec->length) && (relip < sec->min_alloc) && !(sec->instr_flags[relip] & INSTR_VALID)) relip++;

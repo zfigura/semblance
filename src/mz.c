@@ -82,8 +82,8 @@ static void print_code(struct mz *mz) {
                 if (read_byte() == 0) {
                     printf("      ...\n");
                     ip++;
+                    while (read_byte() == 0) ip++;
                 }
-                while (read_byte() == 0) ip++;
             } else {
                 printf("     ...\n");
                 while ((ip < mz->length) && !(mz->flags[ip] & INSTR_VALID)) ip++;
