@@ -106,7 +106,18 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
 
     /* check if we are referencing a named export */
     if (instr.op.arg0 == REL16 && !comment)
+    {
         comment = get_export_name(instr.arg0, pe);
+        if (!comment)
+        {
+            /* Sometimes we have TWO levels of indirection—call to jmp to
+             * relocated address. mingw-w64 does this. */
+
+            fseek(f, addr2offset(instr.arg0, pe), SEEK_SET);
+            if (read_byte() == 0xff && read_byte() == 0x25) /* absolute jmp */
+                comment = get_imported_name(read_dword(), pe);
+        }
+    }
 
     print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, arg0, arg1, comment);
 
