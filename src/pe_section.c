@@ -79,6 +79,17 @@ static char *get_imported_name(dword offset, const struct pe *pe) {
     return NULL;
 }
 
+/* index function */
+static const struct reloc_pe *get_reloc(word ip, const struct pe *pe) {
+    unsigned i;
+    for (i=0; i<pe->reloc_count; i++) {
+        if (pe->reloc_base + pe->relocs[i].offset == ip)
+            return &pe->relocs[i];
+    }
+    warn_at("Byte tagged INSTR_RELOC has no reloc; this is a bug.\n");
+    return NULL;
+}
+
 static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *out, const struct pe *pe) {
     struct instr instr = {0};
     char arg0[32] = "", arg1[32] = "";
@@ -91,12 +102,10 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
 
     sprintf(ip_string, "%8x", ip);
 
-    /* Check for relocations.
-     * PE relocations work a little differently, in that instead of directly
-     * altering each of the relevant bytes (well, dwords) in the image, the
-     * loader relocates a large block of addresses at once, which is referenced
-     * throughout the program. As a result we need to check if the given offset
-     * falls within the relocated section of the import tables. */
+    /* Check for relocations and imported names. PE separates the two concepts:
+     * imported names are done by jumping into a block in .idata which is
+     * relocated, and relocations proper are scattered throughout code sections
+     * and relocated according to the contents of .reloc. */
 
     if (instr.op.opcode == 0xff && (instr.op.subcode == 2 || instr.op.subcode == 4)
         && instr.modrm_disp == DISP_16 && instr.modrm_reg == 8) {
@@ -116,6 +125,30 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
             fseek(f, addr2offset(instr.arg0, pe), SEEK_SET);
             if (read_byte() == 0xff && read_byte() == 0x25) /* absolute jmp */
                 comment = get_imported_name(read_dword(), pe);
+        }
+    }
+
+    /* Not an import or an export. Is it a regular relocation? If so, don't
+     * touch the comment, but adjust the address, since we prefer to print those
+     * relative to the image base. */
+    /* Again, we should probably refactor the code so that arguments have an
+     * associated ip. */
+    /* FIXME #2: We should probably make it more obvious that something is relocated. */
+    if (!comment) {
+        int i;
+        for (i = ip; i < ip+len; i++) {
+            if (sec->instr_flags[i - sec->address] & INSTR_RELOC) {
+                const struct reloc_pe *r = get_reloc(i, pe);
+                if ((instr.op.arg0 == IMM || (instr.op.arg0 == RM && instr.modrm_reg == 8) || instr.op.arg0 == MOFFS16) && r->type == 3)
+                    /* 32-bit relocation on 32-bit imm */
+                    instr.arg0 -= pe->header.opt.ImageBase;
+                else if ((instr.op.arg1 == IMM || (instr.op.arg1 == RM && instr.modrm_reg == 8) || instr.op.arg1 == MOFFS16) && r->type == 3)
+                    instr.arg1 -= pe->header.opt.ImageBase;
+                else
+                    warn_at("unhandled relocation: type %d, instruction %02x %s\n",
+                        r->type, instr.op.opcode, instr.op.name);
+                break;
+            }
         }
     }
 
@@ -245,7 +278,6 @@ static void scan_segment(dword ip, struct pe *pe) {
         if (i < ip+instr_length && i == sec->min_alloc) break;
 
         /* handle conditional and unconditional jumps */
-        /* todo: reloc */
         if (instr.op.flags & OP_BRANCH) {
             /* relative jump, loop, or call */
             struct section *tsec = addr2section(instr.arg0, pe);
@@ -263,6 +295,31 @@ static void scan_segment(dword ip, struct pe *pe) {
                 scan_segment(instr.arg0, pe);
             } else
                 warn_at("Branch '%s' to byte %x not in image.\n", instr.op.name, instr.arg0);
+        }
+
+        for (i = relip; i < relip+instr_length; i++) {
+            if (sec->instr_flags[i] & INSTR_RELOC) {
+                const struct reloc_pe *r = get_reloc(i + sec->address, pe);
+                struct section *tsec;
+                dword taddr;
+
+                fseek(f, sec->offset + i, SEEK_SET);
+                switch (r->type)
+                {
+                case 3: /* HIGHLOW */
+                    taddr = read_dword() - pe->header.opt.ImageBase;
+                    tsec = addr2section(taddr, pe);
+                    if (tsec->flags & 0x20) {
+                        tsec->instr_flags[taddr - tsec->address] |= INSTR_FUNC;
+                        scan_segment(taddr, pe);
+                    }
+                    break;
+                default:
+                    warn_at("Don't know how to handle relocation type %d\n", r->type);
+                    break;
+                }
+                break;
+            }
         }
 
         if (instr.op.flags & OP_STOP)
@@ -324,7 +381,16 @@ void read_sections(struct pe *pe) {
     /* We already read the section header (unlike NE, we had to in order to read
      * everything else), so our job now is just to scan the section contents. */
 
-    /* todo: relocations */
+    /* Relocations first. */
+    for (i = 0; i < pe->reloc_count; i++) {
+        dword address = pe->reloc_base + pe->relocs[i].offset;
+        struct section *sec = addr2section(address, pe);
+        if (sec->flags & 0x20) {
+            /* Anything that's relocated in a code segment is almost certainly a function. */
+            sec->instr_flags[address - sec->address] |= INSTR_RELOC;
+            /* scanning is done in scan_segment() */
+        }
+    }
 
     for (i = 0; i < pe->export_count; i++) {
         dword address = pe->exports[i].address;
@@ -357,6 +423,11 @@ void print_sections(struct pe *pe) {
             sec->name, sec->offset, sec->length, sec->min_alloc);
         printf("    Address: %x\n", sec->address);
         print_section_flags(sec->flags);
+
+        /* These fields should only be populated for object files (I think). */
+        if (sec->reloc_offset || sec->reloc_count)
+            warn("Section %s has relocation data: offset = %x, count = %d\n",
+                sec->name, sec->reloc_offset, sec->reloc_count);
 
         if (sec->flags & 0x40) {
             /* see the appropriate FIXMEs on the NE side */

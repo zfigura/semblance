@@ -263,6 +263,16 @@ static void get_import_module_table(struct pe *pe) {
     }
 }
 
+static void get_reloc_table(struct pe *pe) {
+    long offset = addr2offset(pe->dirs[5].address, pe);
+
+    fseek(f, offset, SEEK_SET);
+    pe->reloc_base = read_dword();
+    pe->reloc_count = (read_dword() - 8) / 2;
+    pe->relocs = malloc(pe->reloc_count * sizeof(struct reloc_pe));
+    fread(pe->relocs, sizeof(struct reloc_pe), pe->reloc_count, f);
+}
+
 void readpe(long offset_pe, struct pe *pe) {
     struct optional_header *opt = &pe->header.opt;
     int i;
@@ -296,6 +306,8 @@ void readpe(long offset_pe, struct pe *pe) {
         get_export_table(pe);
     if (opt->NumberOfRvaAndSizes >= 2 && pe->dirs[1].size)
         get_import_module_table(pe);
+    if (opt->NumberOfRvaAndSizes >= 6 && pe->dirs[5].size)
+        get_reloc_table(pe);
 
     /* Read the code. */
     read_sections(pe);
