@@ -431,7 +431,12 @@ void print_sections(struct pe *pe) {
 
         if (sec->flags & 0x40) {
             /* see the appropriate FIXMEs on the NE side */
-            print_data(sec);
+            /* Don't print .rsrc by default. Some others should probably be
+             * excluded, too, but .rsrc is a particularly bad offender since
+             * large binaries might be put into it. */
+            if ((strcmp(sec->name, ".rsrc") && strcmp(sec->name, ".reloc"))
+                || (opts & FULL_CONTENTS))
+                print_data(sec);
         } else if (sec->flags & 0x20) {
             if (opts & FULL_CONTENTS)
                 print_data(sec);
