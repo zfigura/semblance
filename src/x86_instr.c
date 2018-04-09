@@ -224,7 +224,7 @@ static const struct op instructions[256] = {
     {0xC0, 8},  /* rotate/shift */
     {0xC1, 8},  /* rotate/shift */
     {0xC2, 8,  0, "ret",        IMM16,  0,      OP_STOP},
-    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP},       /* fixme: rep? */
+    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP|OP_REP},
     {0xC4, 8, 16, "les",        REG,    MEM},
     {0xC5, 8, 16, "lds",        REG,    MEM},
     {0xC6, 0},  /* mov (subcode 0 only) */
@@ -524,7 +524,8 @@ static const struct op instructions_0F[] = {
     {0xBD, 8, 16, "bsr",        REG,    RM},
     {0xBE, 8, 16, "movsx",      REG,    RM},
     {0xBF, 8, 16, "movsx",      REG,    RM},
-    /* C0/1 - xadd? */
+    {0xC0, 8,  8, "xadd",       RM,     REG,    OP_LOCK},
+    {0xC1, 8, 16, "xadd",       RM,     REG,    OP_LOCK},
 
     {0xC8, 8, 16, "bswap",      AX},
     {0xC9, 8, 16, "bswap",      CX},
@@ -1862,7 +1863,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
             if (!instr->op.name[0]) {
                 len += get_sse_instr(p+len, instr);
             }
-            instr->op.opcode = 0x0F00 | instr->op.opcode;
+            instr->op.opcode = 0x0F00 | opcode;
         } else if (opcode >= 0xD8 && opcode <= 0xDF) {
             len += get_fpu_instr(p+len, &instr->op);
         } else {
@@ -1881,7 +1882,6 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
         if (!instr->op.name[0]) {
             /* supply some default values so we can keep parsing */
             strcpy(instr->op.name, "?"); /* less arrogant than objdump's (bad) */
-            instr->op.opcode = opcode;
             instr->op.subcode = subcode;
             instr->op.size = 0;
             instr->op.arg0 = 0;
