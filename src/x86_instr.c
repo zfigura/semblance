@@ -1082,7 +1082,7 @@ static const struct op instructions_sse_single[] = {
     {0x38, 0xF0,16, "movbe",        REG,    MEM},   /* not SSE */
     {0x38, 0xF1,16, "movbe",        MEM,    REG},   /* not SSE */
 
-    {0x3A, 0x0F, 0, "palignr",      MMX,    MM},
+    {0x3A, 0x0F, 0, "palignr",      MMX,    MM,     OP_ARG2_IMM8},
 };
 
 static const struct op instructions_sse_single_op32[] = {
@@ -1148,7 +1148,7 @@ static const struct op instructions_sse_single_op32[] = {
     {0x3A, 0x0C, 0, "blendps",      XMM,    XM,     OP_ARG2_IMM8},
     {0x3A, 0x0D, 0, "blendpd",      XMM,    XM,     OP_ARG2_IMM8},
     {0x3A, 0x0E, 0, "pblendw",      XMM,    XM,     OP_ARG2_IMM8},
-    {0x3A, 0x0F, 0, "palignr",      XMM,    XM},
+    {0x3A, 0x0F, 0, "palignr",      XMM,    XM,     OP_ARG2_IMM8},
 
     {0x3A, 0x14, 0, "pextrb",       RM,     XMM,    OP_ARG2_IMM8},
     {0x3A, 0x15, 0, "pextrw",       RM,     XMM,    OP_ARG2_IMM8},
