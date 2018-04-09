@@ -93,10 +93,10 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
 
     /* Check for relocations.
      * PE relocations work a little differently, in that instead of directly
-     * altering each of the relevant bytes (well, dwords) in the image, we 
-     * relocate a large block of addresses at once and then reference it.
-     * As a result we need to check if the given offset falls within the
-     * relocated section of the import tables. */
+     * altering each of the relevant bytes (well, dwords) in the image, the
+     * loader relocates a large block of addresses at once, which is referenced
+     * throughout the program. As a result we need to check if the given offset
+     * falls within the relocated section of the import tables. */
 
     if (instr.op.opcode == 0xff && (instr.op.subcode == 2 || instr.op.subcode == 4)
         && instr.modrm_disp == DISP_16 && instr.modrm_reg == 8) {
@@ -296,15 +296,19 @@ void read_sections(struct pe *pe) {
     for (i = 0; i < pe->export_count; i++) {
         dword address = pe->exports[i].address;
         struct section *sec = addr2section(address, pe);
-        sec->instr_flags[address - sec->address] |= INSTR_FUNC;
-        scan_segment(pe->exports[i].address, pe);
+        if (sec->flags & 0x20) {
+            sec->instr_flags[address - sec->address] |= INSTR_FUNC;
+            scan_segment(pe->exports[i].address, pe);
+        }
     }
 
     if (!(pe->header.file.Characteristics & 0x2000)) {
         dword entry_point = pe->header.opt.AddressOfEntryPoint;
         struct section *sec = addr2section(entry_point, pe);
-        sec->instr_flags[entry_point - sec->address] |= INSTR_FUNC;
-        scan_segment(entry_point, pe);
+        if (sec->flags & 0x20) {
+            sec->instr_flags[entry_point - sec->address] |= INSTR_FUNC;
+            scan_segment(entry_point, pe);
+        }
     }
 }
 

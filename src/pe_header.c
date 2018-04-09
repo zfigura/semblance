@@ -279,6 +279,8 @@ void readpe(long offset_pe, struct pe *pe) {
         fread(&pe->sections[i], 0x28, 1, f);
 
         /* allocate zeroes, but only if it's a code section */
+        /* in theory nobody will ever try to jump into a data section.
+         * VirtualProtect() be damned */
         if (pe->sections[i].flags & 0x20)
             pe->sections[i].instr_flags = calloc(pe->sections[i].min_alloc, sizeof(byte));
         else
