@@ -942,7 +942,7 @@ static const struct op instructions_sse_op32[] = {
     {0xD4, 8,  0, "paddd",      XMM,    XM},
     {0xD5, 8,  0, "pmullw",     XMM,    XM},
     {0xD6, 8,  0, "movq",       XM,     XMM},
-    {0xD7, 8,  0, "pmovmskb",   REGONLY,XMM},
+    {0xD7, 8, 16, "pmovmskb",   REGONLY,XMM},
     {0xD8, 8,  0, "psubusb",    XMM,    XM},
     {0xD9, 8,  0, "psubusw",    XMM,    XM},
     {0xDA, 8,  0, "pminub",     XMM,    XM},
@@ -1194,6 +1194,32 @@ static int instr_matches(const byte opcode, const byte subcode, const struct op 
     return ((opcode == op->opcode) && ((op->subcode == 8) || (subcode == op->subcode)));
 }
 
+/* aka 3 byte opcode */
+static int get_sse_single(const byte *p, struct instr *instr) {
+    int i;
+
+    if (instr->prefix & PREFIX_OP32) {
+        for (i = 0; i < sizeof(instructions_sse_single_op32)/sizeof(struct op); i++) {
+            if (instructions_sse_single_op32[i].opcode == p[0] &&
+                instructions_sse_single_op32[i].subcode == p[1]) {
+                instr->op = instructions_sse_single_op32[i];
+                instr->prefix &= ~PREFIX_OP32;
+                return 1;
+            }
+        }
+    } else {
+        for (i = 0; i < sizeof(instructions_sse_single)/sizeof(struct op); i++) {
+            if (instructions_sse_single[i].opcode == p[0] &&
+                instructions_sse_single[i].subcode == p[1]) {
+                instr->op = instructions_sse_single[i];
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int get_sse_instr(const byte *p, struct instr *instr) {
     byte subcode = REGOF(p[1]);
     unsigned i;
@@ -1208,14 +1234,6 @@ static int get_sse_instr(const byte *p, struct instr *instr) {
                 instr->op = instructions_sse_op32[i];
                 instr->prefix &= ~PREFIX_OP32;
                 return 0;
-            }
-        }
-        for (i = 0; i < sizeof(instructions_sse_single_op32)/sizeof(struct op); i++) {
-            if (instructions_sse_single_op32[i].opcode == p[0] &&
-                instructions_sse_single_op32[i].subcode == p[1]) {
-                instr->op = instructions_sse_single_op32[i];
-                instr->prefix &= ~PREFIX_OP32;
-                return 1;
             }
         }
     } else if (instr->prefix & PREFIX_REPNE) {
@@ -1241,16 +1259,28 @@ static int get_sse_instr(const byte *p, struct instr *instr) {
                 return 0;
             }
         }
-        for (i = 0; i < sizeof(instructions_sse_single)/sizeof(struct op); i++) {
-            if (instructions_sse_single[i].opcode == p[0] &&
-                instructions_sse_single[i].subcode == p[1]) {
-                instr->op = instructions_sse_single[i];
-                return 1;
-            }
-        }
     }
 
-    return 0;
+    return get_sse_single(p, instr);
+}
+
+static int get_0f_instr(const byte *p, struct instr *instr) {
+    byte subcode = REGOF(p[1]);
+    unsigned i;
+    int len;
+
+    for (i = 0; i < sizeof(instructions_0F)/sizeof(struct op); i++) {
+        if (instr_matches(p[0], subcode, &instructions_0F[i])) {
+            instr->op = instructions_0F[i];
+            len = 0;
+            break;
+        }
+    }
+    if (!instr->op.name[0])
+        len = get_sse_instr(p, instr);
+
+    instr->op.opcode = 0x0F00 | p[0];
+    return len;
 }
 
 /* Parameters:
@@ -1585,6 +1615,8 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
         if (instr->modrm_disp == DISP_REG) {
             if (argtype == XM) {
                 get_xmm(out, instr->modrm_reg);
+                if (instr->vex_256)
+                    out[asm_syntax == GAS ? 1 : 0] = 'y';
                 break;
             } else if (argtype == MM) {
                 get_mmx(out, instr->modrm_reg);
@@ -1802,6 +1834,8 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
     case XMM:
     case XMMONLY:
         get_xmm(out, value);
+        if (instr->vex_256)
+            out[asm_syntax == GAS ? 1 : 0] = 'y';
         break;
     default:
         break;
@@ -1842,28 +1876,30 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
     opcode = p[len];
 
     /* copy the op_info */
-    if (instructions[opcode].name[0]) {
+    if (opcode == 0xC4 && MODOF(p[len+1]) == 3 && is32) {
+        fprintf(stderr, "fixme: %x: ignoring VEX prefix\n", ip);
+        instr->vex = 1;
+        len += 3;
+        len += get_sse_single(p+len, instr);
+    } else if (opcode == 0xC5 && MODOF(p[len+1]) == 3 && is32) {
+        len++;
+        instr->vex = 1;
+        instr->vex_reg = ~((p[len] >> 3) & 7);
+        instr->vex_256 = (p[len] & 4) ? 1 : 0;
+        if ((p[len] & 3) == 3) instr->prefix |= PREFIX_REPNE;
+        else if ((p[len] & 3) == 2) instr->prefix |= PREFIX_REPE;
+        else if ((p[len] & 3) == 1) instr->prefix |= PREFIX_OP32;
+        len++;
+        len += get_0f_instr(p+len, instr);
+    } else if (instructions[opcode].name[0]) {
         instr->op = instructions[opcode];
     } else {
         byte subcode = REGOF(p[len+1]);
 
         /* do we have a member of an instruction group? */
         if (opcode == 0x0F) {
-            unsigned i;
-            
             len++;
-            opcode = p[len];
-            subcode = REGOF(p[len+1]);
-            for (i=0; i<sizeof(instructions_0F)/sizeof(struct op); i++) {
-                if (instr_matches(opcode, subcode, &instructions_0F[i])) {
-                    instr->op = instructions_0F[i];
-                    break;
-                }
-            }
-            if (!instr->op.name[0]) {
-                len += get_sse_instr(p+len, instr);
-            }
-            instr->op.opcode = 0x0F00 | opcode;
+            len += get_0f_instr(p+len, instr);
         } else if (opcode >= 0xD8 && opcode <= 0xDF) {
             len += get_fpu_instr(p+len, &instr->op);
         } else {
@@ -2083,6 +2119,8 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
         out += sprintf(out, "wait ");
     }
 
+    if (instr->vex)
+        out += sprintf(out, "v");
     out += sprintf(out, "%s", instr->op.name);
 
     if (arg0[0] || arg1[0])
@@ -2092,6 +2130,8 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
         /* fixme: are all of these orderings correct? */
         if (arg1[0])
             out += sprintf(out, "%s,", arg1);
+        if (instr->vex_reg)
+            out += sprintf(out, "%%ymm%d, ", instr->vex_reg);
         if (arg0[0])
             out += sprintf(out, "%s", arg0);
         if (arg2[0])
@@ -2101,6 +2141,8 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
             out += sprintf(out, "%s", arg0);
         if (arg0[0] && arg1[0])
             out += sprintf(out, ", ");
+        if (instr->vex_reg)
+            out += sprintf(out, "ymm%d, ", instr->vex_reg);
         if (arg1[0])
             out += sprintf(out, "%s", arg1);
         if (arg2[0])

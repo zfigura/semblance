@@ -118,6 +118,10 @@ struct instr {
     byte sib_scale;
     byte sib_index;
     int usedmem:1;  /* used for error checking */
+
+    int vex:1;
+    unsigned int vex_reg:3;
+    int vex_256:1;
 };
 
 extern int get_instr(dword ip, const byte *p, struct instr *instr, int is32);
