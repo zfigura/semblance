@@ -215,7 +215,7 @@ static void print_data(const struct segment *seg) {
 
     for (ip = 0; ip < seg->length; ip += 16) {
         byte row[16];
-        int len = (seg->length-ip >= 16) ? 16 : (seg->length-ip);
+        int len = min(seg->length-ip, 16);
         int i;
 
         fseek(f, seg->start+ip, SEEK_SET);

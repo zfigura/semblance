@@ -170,6 +170,39 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
     putchar('\n');
 }
 
+static void print_data(const struct section *sec) {
+    dword relip = 0;
+
+    /* Page alignment means that (contrary to NE) sections are going to end with
+     * a bunch of annoying zeroes. So don't read past the minimum allocation. */
+    dword length = min(sec->length, sec->min_alloc);
+
+    for (relip = 0; relip < length; relip += 16) {
+        byte row[16];
+        int len = min(length-relip, 16);
+        int i;
+
+        fseek(f, sec->offset + relip, SEEK_SET);
+        fread(row, sizeof(byte), len, f);
+
+        printf("%8x", relip + sec->address);
+        for (i=0; i<16; i++) {
+            if (i < len)
+                printf(" %02x", row[i]);
+            else
+                printf("   ");
+        }
+        printf("  ");
+        for (i=0; i<len; i++){
+                if ((row[i] >= ' ') && (row[i] <= '~'))
+                    putchar(row[i]);
+                else
+                    putchar('.');
+        }
+        putchar('\n');
+    }
+}
+
 static void scan_segment(dword ip, struct pe *pe) {
     struct section *sec = addr2section(ip, pe);
     dword relip;
@@ -326,9 +359,11 @@ void print_sections(struct pe *pe) {
         print_section_flags(sec->flags);
 
         if (sec->flags & 0x40) {
-            /* data: todo */
+            /* see the appropriate FIXMEs on the NE side */
+            print_data(sec);
         } else if (sec->flags & 0x20) {
-            /* todo: FULL_CONTENTS */
+            if (opts & FULL_CONTENTS)
+                print_data(sec);
             print_disassembly(sec, pe);
         }
     }
