@@ -342,8 +342,17 @@ void dumppe(long offset_pe) {
         putchar('\n');
         if (pe.exports) {
             printf("Exports:\n");
-            for (i = 0; i < pe.export_count; i++)
-                printf("\t%5d\t%#8x\t%s\n", pe.exports[i].ordinal, pe.exports[i].address, pe.exports[i].name);
+            for (i = 0; i < pe.export_count; i++) {
+                struct section *sec = addr2section(pe.exports[i].address, &pe);
+                printf("\t%5d\t%#8x\t%s", pe.exports[i].ordinal, pe.exports[i].address, pe.exports[i].name);
+                if (sec == addr2section(pe.dirs[0].address, &pe)) {
+                    char c;
+                    printf(" -> ");
+                    fseek(f, addr2offset(pe.exports[i].address, &pe), SEEK_SET);
+                    while ((c = read_byte())) putchar(c);
+                }
+                putchar('\n');
+            }
         } else
             printf("No export table\n");
     }
