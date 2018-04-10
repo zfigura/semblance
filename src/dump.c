@@ -37,6 +37,7 @@ static void dump_file(char *file){
 
     magic = read_word();
 
+    printf("File: %s\n", file);
     if (magic == 0x5a4d){ /* MZ */
         fseek(f, 0x3c, SEEK_SET);
         offset = read_dword();
