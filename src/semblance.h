@@ -76,6 +76,9 @@ extern word resource_type[MAXARGS];
 extern word resource_id[MAXARGS];
 extern word resource_count;
 
+/* Whether to print addresses relative to the image base for PE files. */
+extern int pe_rel_addr;
+
 /* Entry points */
 void dumpmz(void);
 void dumpne(long offset_ne);

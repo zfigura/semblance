@@ -82,6 +82,7 @@ static const char help_message[] =
 "\t-x, --all-headers                    Print all headers.\n"
 "\t--no-show-addresses                  Don't print instruction addresses.\n"
 "\t--no-show-raw-insn                   Don't print raw instruction hex code.\n"
+"\t--pe-rel-addr=[...]                  Use relative addresses for PE files.\n"
 ;
 
 static const struct option long_options[] = {
@@ -104,6 +105,7 @@ static const struct option long_options[] = {
     {"all-headers",             no_argument,        NULL, 'x'},
     {"no-show-raw-insn",        no_argument,        NULL, NO_SHOW_RAW_INSN},
     {"no-prefix-addresses",     no_argument,        NULL, NO_SHOW_ADDRESSES},
+    {"pe-rel-addr",             required_argument,  NULL, 0x80},
     {0}
 };
 
@@ -206,7 +208,18 @@ int main(int argc, char *argv[]){
             break;
         case 'x': /* all headers */
             mode |= DUMPHEADER | DUMPEXPORT | DUMPIMPORTMOD;
-        default: /* '?' */
+            break;
+        case 0x80:
+            if (optarg[0] == '1' || optarg[0] == 'y' || optarg[0] == 'Y')
+                pe_rel_addr = 1;
+            else if (optarg[0] == '0' || optarg[0] == 'n' || optarg[0] == 'N')
+                pe_rel_addr = 0;
+            else {
+                fprintf(stderr, "Unrecognized --pe-rel-addr option `%s'.\n", optarg);
+                return 1;
+            }
+            break;
+        default:
             fprintf(stderr, "Usage: dumpne [options] <file>\n");
             return 1;
         }

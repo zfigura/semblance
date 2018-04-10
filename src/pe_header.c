@@ -115,8 +115,12 @@ static void print_header(struct header_pe *header) {
 
     printf("Linker version: %d.%d\n", header->opt.MajorLinkerVersion, header->opt.MinorLinkerVersion); /* 1a */
 
-    if (header->opt.AddressOfEntryPoint)
-        printf("Program entry point: 0x%x\n", header->opt.AddressOfEntryPoint); /* 28 */
+    if (header->opt.AddressOfEntryPoint) {
+        dword address = header->opt.AddressOfEntryPoint;
+        if (!pe_rel_addr)
+            address += header->opt.ImageBase;
+        printf("Program entry point: 0x%x\n", address); /* 28 */
+    }
 
     printf("Base of code section: 0x%x\n", header->opt.BaseOfCode);
     printf("Base of data section: 0x%x\n", header->opt.BaseOfData);
@@ -368,6 +372,21 @@ void dumppe(long offset_pe) {
         return;
     }
 
+    /* objdump always applies the image base to addresses. This makes sense for
+     * EXEs, which can always be loaded at their preferred address, but for DLLs
+     * it just makes debugging more annoying, since you have to subtract the
+     * image base and *then* add the address the DLL was actually loaded at.
+     * In theory PE provides us with everything we need to fix up a DLL
+     * (relocations etc.) so that we only ever print the *relative* addresses.
+     * But we can't do the same for an EXE, and we probably don't want to either.
+     * Is the discrepancy going to be confusing? Probably not that much.
+     *
+     * Anyway, offer the user the option. Default is to enable relative addressing
+     * for DLLs but disable it for EXEs. Note that if they manually enable it,
+     * we won't be able to fix up everything. Caveat emptor. */
+    if (pe_rel_addr == -1)
+        pe_rel_addr = pe.header.file.Characteristics & 0x2000;
+
     printf("Module type: PE (Portable Executable)\n");
     if (pe.name) printf("Module name: %s\n", pe.name);
 
@@ -379,7 +398,10 @@ void dumppe(long offset_pe) {
         if (pe.exports) {
             printf("Exports:\n");
             for (i = 0; i < pe.export_count; i++) {
-                printf("\t%5d\t%#8x\t%s", pe.exports[i].ordinal, pe.exports[i].address,
+                dword address = pe.exports[i].address;
+                if (!pe_rel_addr)
+                    address += pe.header.opt.ImageBase;
+                printf("\t%5d\t%#8x\t%s", pe.exports[i].ordinal, address,
                     pe.exports[i].name ? pe.exports[i].name : "<no name>");
                 if (pe.exports[i].address >= pe.dirs[0].address &&
                     pe.exports[i].address < (pe.dirs[0].address + pe.dirs[0].size)) {

@@ -33,6 +33,8 @@
 #define warn_at(...)
 #endif
 
+int pe_rel_addr = -1;
+
 struct section *addr2section(dword addr, const struct pe *pe) {
     /* Even worse than the below, some data is sensitive to which section it's in! */
 
@@ -97,10 +99,14 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     char temp_comment[9];
     char *comment = NULL;
     char ip_string[9];
+    dword absip = ip;
 
-    len = get_instr(ip, p, &instr, 1);
+    if (!pe_rel_addr)
+        absip += pe->header.opt.ImageBase;
 
-    sprintf(ip_string, "%8x", ip);
+    len = get_instr(absip, p, &instr, 1);
+
+    sprintf(ip_string, "%8x", absip);
 
     /* Check for relocations and imported names. PE separates the two concepts:
      * imported names are done by jumping into a block in .idata which is
@@ -161,7 +167,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
 }
 
 static void print_disassembly(const struct section *sec, const struct pe *pe) {
-    dword relip = 0, ip;
+    dword relip = 0, ip, absip;
 
     byte buffer[MAX_INSTR];
     char out[256];
@@ -194,10 +200,14 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
 
         fread(buffer, 1, min(sizeof(buffer), sec->length - relip), f);
 
+        absip = ip;
+        if (!pe_rel_addr)
+            absip += pe->header.opt.ImageBase;
+
         if (sec->instr_flags[relip] & INSTR_FUNC) {
             char *name = get_export_name(ip, pe);
             printf("\n");
-            printf("%x <%s>:\n", ip, name ? name : "no name");
+            printf("%x <%s>:\n", absip, name ? name : "no name");
         }
 
         relip += print_pe_instr(sec, ip, buffer, out, pe);
@@ -206,8 +216,8 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
     putchar('\n');
 }
 
-static void print_data(const struct section *sec) {
-    dword relip = 0;
+static void print_data(const struct section *sec, struct pe *pe) {
+    dword relip = 0, absip;
 
     /* Page alignment means that (contrary to NE) sections are going to end with
      * a bunch of annoying zeroes. So don't read past the minimum allocation. */
@@ -221,7 +231,11 @@ static void print_data(const struct section *sec) {
         fseek(f, sec->offset + relip, SEEK_SET);
         fread(row, sizeof(byte), len, f);
 
-        printf("%8x", relip + sec->address);
+        absip = relip + sec->address;
+        if (!pe_rel_addr)
+            absip += pe->header.opt.ImageBase;
+
+        printf("%8x", absip);
         for (i=0; i<16; i++) {
             if (i < len)
                 printf(" %02x", row[i]);
@@ -441,7 +455,7 @@ void print_sections(struct pe *pe) {
          * seen mingw-w64 do this. (Because there's data stored in it?) */
         if (sec->flags & 0x20) {
             if (opts & FULL_CONTENTS)
-                print_data(sec);
+                print_data(sec, pe);
             print_disassembly(sec, pe);
         } else if (sec->flags & 0x40) {
             /* see the appropriate FIXMEs on the NE side */
@@ -450,7 +464,7 @@ void print_sections(struct pe *pe) {
              * large binaries might be put into it. */
             if ((strcmp(sec->name, ".rsrc") && strcmp(sec->name, ".reloc"))
                 || (opts & FULL_CONTENTS))
-                print_data(sec);
+                print_data(sec, pe);
         }
     }
 }
