@@ -493,7 +493,7 @@ static const struct op instructions_0F[] = {
     {0x9F, 0,  8, "setg",       RM},
     {0xA0, 8,  0, "push",       FS},
     {0xA1, 8,  0, "pop",        FS},
-    /* A2 - cpuid? */
+    {0xA2, 8,  0, "cpuid"},
     {0xA3, 8, 16, "bt",         RM,     REG},
     {0xA4, 8, 16, "shld",       RM,     REG,    OP_ARG2_IMM8},
     {0xA5, 8, 16, "shld",       RM,     REG,    OP_ARG2_CL},
@@ -1195,13 +1195,13 @@ static int instr_matches(const byte opcode, const byte subcode, const struct op 
 }
 
 /* aka 3 byte opcode */
-static int get_sse_single(const byte *p, struct instr *instr) {
+static int get_sse_single(byte opcode, byte subcode, struct instr *instr) {
     int i;
 
     if (instr->prefix & PREFIX_OP32) {
         for (i = 0; i < sizeof(instructions_sse_single_op32)/sizeof(struct op); i++) {
-            if (instructions_sse_single_op32[i].opcode == p[0] &&
-                instructions_sse_single_op32[i].subcode == p[1]) {
+            if (instructions_sse_single_op32[i].opcode == opcode &&
+                instructions_sse_single_op32[i].subcode == subcode) {
                 instr->op = instructions_sse_single_op32[i];
                 instr->prefix &= ~PREFIX_OP32;
                 return 1;
@@ -1209,8 +1209,8 @@ static int get_sse_single(const byte *p, struct instr *instr) {
         }
     } else {
         for (i = 0; i < sizeof(instructions_sse_single)/sizeof(struct op); i++) {
-            if (instructions_sse_single[i].opcode == p[0] &&
-                instructions_sse_single[i].subcode == p[1]) {
+            if (instructions_sse_single[i].opcode == opcode &&
+                instructions_sse_single[i].subcode == subcode) {
                 instr->op = instructions_sse_single[i];
                 return 1;
             }
@@ -1261,13 +1261,31 @@ static int get_sse_instr(const byte *p, struct instr *instr) {
         }
     }
 
-    return get_sse_single(p, instr);
+    return get_sse_single(p[0], p[1], instr);
 }
 
 static int get_0f_instr(const byte *p, struct instr *instr) {
     byte subcode = REGOF(p[1]);
     unsigned i;
     int len;
+
+    /* a couple of special (read: annoying) cases first */
+    if (p[0] == 0x01 && MODOF(p[1]) == 3) {
+        instr->op.opcode = 0x0F01;
+        instr->op.subcode = p[1];
+        switch (p[1]) {
+        case 0xC1: strcpy(instr->op.name, "vmcall"); break;
+        case 0xC2: strcpy(instr->op.name, "vmlaunch"); break;
+        case 0xC3: strcpy(instr->op.name, "vmresume"); break;
+        case 0xC4: strcpy(instr->op.name, "vmcall"); break;
+        case 0xC8: strcpy(instr->op.name, "monitor"); break;
+        case 0xC9: strcpy(instr->op.name, "mwait"); break;
+        case 0xD0: strcpy(instr->op.name, "xgetbv"); break;
+        case 0xD1: strcpy(instr->op.name, "xsetbv"); break;
+        case 0xF9: strcpy(instr->op.name, "rdtscp"); break;
+        }
+        return 1;
+    }
 
     for (i = 0; i < sizeof(instructions_0F)/sizeof(struct op); i++) {
         if (instr_matches(p[0], subcode, &instructions_0F[i])) {
@@ -1877,10 +1895,19 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
 
     /* copy the op_info */
     if (opcode == 0xC4 && MODOF(p[len+1]) == 3 && is32) {
-        fprintf(stderr, "fixme: %x: ignoring VEX prefix\n", ip);
+        byte subcode = 0xcc;
+        len++;
         instr->vex = 1;
-        len += 3;
-        len += get_sse_single(p+len, instr);
+        if ((p[len] & 0x1F) == 2) subcode = 0x38;
+        else if ((p[len] & 0x1F) == 3) subcode = 0x3A;
+        else warn("Unhandled subcode %x at %x\n", p[len], ip);
+        len++;
+        instr->vex_reg = ~((p[len] >> 3) & 7);
+        instr->vex_256 = (p[len] & 4) ? 1 : 0;
+        if ((p[len] & 3) == 3) instr->prefix |= PREFIX_REPNE;
+        else if ((p[len] & 3) == 2) instr->prefix |= PREFIX_REPE;
+        else if ((p[len] & 3) == 1) instr->prefix |= PREFIX_OP32;
+        len += get_sse_single(subcode, p[len+1], instr);
     } else if (opcode == 0xC5 && MODOF(p[len+1]) == 3 && is32) {
         len++;
         instr->vex = 1;
