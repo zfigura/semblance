@@ -343,9 +343,9 @@ void dumppe(long offset_pe) {
         if (pe.exports) {
             printf("Exports:\n");
             for (i = 0; i < pe.export_count; i++) {
-                struct section *sec = addr2section(pe.exports[i].address, &pe);
                 printf("\t%5d\t%#8x\t%s", pe.exports[i].ordinal, pe.exports[i].address, pe.exports[i].name);
-                if (sec == addr2section(pe.dirs[0].address, &pe)) {
+                if (pe.exports[i].address >= pe.dirs[0].address &&
+                    pe.exports[i].address < (pe.dirs[0].address + pe.dirs[0].size)) {
                     char c;
                     printf(" -> ");
                     fseek(f, addr2offset(pe.exports[i].address, &pe), SEEK_SET);

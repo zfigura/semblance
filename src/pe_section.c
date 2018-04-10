@@ -397,7 +397,8 @@ void read_sections(struct pe *pe) {
     for (i = 0; i < pe->export_count; i++) {
         dword address = pe->exports[i].address;
         struct section *sec = addr2section(address, pe);
-        if (sec->flags & 0x20 && sec != addr2section(pe->dirs[0].address, pe)) {
+        if (sec->flags & 0x20 && !(address >= pe->dirs[0].address &&
+            address < (pe->dirs[0].address + pe->dirs[0].size))) {
             sec->instr_flags[address - sec->address] |= INSTR_FUNC;
             scan_segment(pe->exports[i].address, pe);
         }
