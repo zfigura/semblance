@@ -336,7 +336,7 @@ void readpe(long offset_pe, struct pe *pe) {
 }
 
 void freepe(struct pe *pe) {
-    int i;
+    int i, j;
 
     free(pe->dirs);
     for (i = 0; i < pe->header.file.NumberOfSections; i++)
@@ -346,6 +346,14 @@ void freepe(struct pe *pe) {
     for (i = 0; i < pe->export_count; i++)
         free(pe->exports[i].name);
     free(pe->exports);
+    for (i = 0; i < pe->import_count; i++) {
+        for (j = 0; j < pe->imports[i].count; j++)
+            free(pe->imports[i].nametab[j]);
+        free(pe->imports[i].nametab);
+        free(pe->imports[i].module);
+    }
+    free(pe->imports);
+    free(pe->relocs);
 }
 
 void dumppe(long offset_pe) {
