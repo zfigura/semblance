@@ -1882,9 +1882,12 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
 
     /* first iterate through prefixes until we find a real opcode */
     while ((prefix = get_prefix(p[len]))) {
-        if (((instr->prefix & PREFIX_SEG_MASK) && (prefix & PREFIX_SEG_MASK)) ||
-            (instr->prefix & prefix)) {
+        if ((instr->prefix & PREFIX_SEG_MASK) && (prefix & PREFIX_SEG_MASK)) {
             instr->op = instructions[p[len]];
+            instr->prefix &= ~PREFIX_SEG_MASK;
+        } else if (instr->prefix & prefix) {
+            instr->op = instructions[p[len]];
+            instr->prefix &= ~prefix;
             return len;
         }
         instr->prefix |= prefix;
