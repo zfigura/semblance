@@ -1,10 +1,10 @@
-Semblance version 0.1
+Semblance version 0.2
 =====================
 
-Semblance is eventually meant as a set of tools to manipulate assembly
-code. Currently it only contains a single program:
+Semblance is eventually meant as a set of tools to manipulate assembly code.
+Currently it only contains a single program:
 
-dump - produce disassembly and other information from exectable files. 
+dump - produce disassembly and other information from exectable files.
        Originally written to support NE (New Executable) files due to the lack
        of any available tool. Currently supports MZ (aka DOS), NE, and PE
        (Portable Executable, i.e. Win32) executables.
@@ -23,3 +23,24 @@ To build, just run:
     make
 
 To install to your computer, subsequently run "make install" as root.
+
+About
+-----
+
+I originally wrote Semblance as a disassembler for NE images, in the absence
+of any existing tool. As I wrote it I added some quite useful features, and
+eventually decided these were useful enough to extend it to PE images as well,
+where an existing decompilation tool (objdump) had enough annoyances that
+Semblance actually ended up being more useful.
+
+Some of the notable features of Semblance are:
+    * Instead of indiscriminately trying to dump everything as assembly, it
+      scans entry points and exports, following branches, to determine what
+      instructions are valid code, and dumps only these by default. This
+      avoids dumping data or zeroes, inserted into text sections, as code.
+    * Prints warnings when bogus instructions are disassembled.
+    * Can disassemble NE resources. (PE resources are forthcoming.)
+    * Detects instructions that call PE imports better—e.g. can recognize a
+      call into an IAT.
+    * Prints PE relocations inline.
+    * Supports MASM, NASM, and GAS-based syntax.
