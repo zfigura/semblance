@@ -432,7 +432,13 @@ void print_sections(struct pe *pe) {
             warn("Section %s has relocation data: offset = %x, count = %d\n",
                 sec->name, sec->reloc_offset, sec->reloc_count);
 
-        if (sec->flags & 0x40) {
+        /* Sometimes the .text section is marked as both code and data. I've
+         * seen mingw-w64 do this. (Because there's data stored in it?) */
+        if (sec->flags & 0x20) {
+            if (opts & FULL_CONTENTS)
+                print_data(sec);
+            print_disassembly(sec, pe);
+        } else if (sec->flags & 0x40) {
             /* see the appropriate FIXMEs on the NE side */
             /* Don't print .rsrc by default. Some others should probably be
              * excluded, too, but .rsrc is a particularly bad offender since
@@ -440,10 +446,6 @@ void print_sections(struct pe *pe) {
             if ((strcmp(sec->name, ".rsrc") && strcmp(sec->name, ".reloc"))
                 || (opts & FULL_CONTENTS))
                 print_data(sec);
-        } else if (sec->flags & 0x20) {
-            if (opts & FULL_CONTENTS)
-                print_data(sec);
-            print_disassembly(sec, pe);
         }
     }
 }
