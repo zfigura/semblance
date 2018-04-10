@@ -163,7 +163,7 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
     byte buffer[MAX_INSTR];
     char out[256];
 
-    while (relip < sec->length) {
+    while (relip < sec->length && relip < sec->min_alloc) {
         fseek(f, sec->offset + relip, SEEK_SET);
 
         /* find a valid instruction */
@@ -275,7 +275,7 @@ static void scan_segment(dword ip, struct pe *pe) {
         for (i = relip; i < relip+instr_length && i < sec->min_alloc; i++) sec->instr_flags[i] |= INSTR_SCANNED;
 
         /* instruction which hangs over the minimum allocation */
-        if (i < ip+instr_length && i == sec->min_alloc) break;
+        if (i < relip+instr_length && i == sec->min_alloc) break;
 
         /* handle conditional and unconditional jumps */
         if (instr.op.flags & OP_BRANCH) {
