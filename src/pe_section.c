@@ -139,7 +139,9 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
         for (i = ip; i < ip+len; i++) {
             if (sec->instr_flags[i - sec->address] & INSTR_RELOC) {
                 const struct reloc_pe *r = get_reloc(i, pe);
-                if ((instr.op.arg0 == IMM || (instr.op.arg0 == RM && instr.modrm_reg == 8) || instr.op.arg0 == MOFFS16) && r->type == 3)
+                if (r->type == 0)
+                    ;   /* not even a real relocation, just padding */
+                else if ((instr.op.arg0 == IMM || (instr.op.arg0 == RM && instr.modrm_reg == 8) || instr.op.arg0 == MOFFS16) && r->type == 3)
                     /* 32-bit relocation on 32-bit imm */
                     instr.arg0 -= pe->header.opt.ImageBase;
                 else if ((instr.op.arg1 == IMM || (instr.op.arg1 == RM && instr.modrm_reg == 8) || instr.op.arg1 == MOFFS16) && r->type == 3)
@@ -306,6 +308,8 @@ static void scan_segment(dword ip, struct pe *pe) {
                 fseek(f, sec->offset + i, SEEK_SET);
                 switch (r->type)
                 {
+                case 0: /* padding */
+                    break;
                 case 3: /* HIGHLOW */
                     taddr = read_dword() - pe->header.opt.ImageBase;
                     tsec = addr2section(taddr, pe);
