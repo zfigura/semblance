@@ -94,7 +94,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     struct instr instr = {0};
     char arg0[32] = "", arg1[32] = "";
     unsigned len;
-
+    char temp_comment[9];
     char *comment = NULL;
     char ip_string[9];
 
@@ -133,7 +133,6 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
      * relative to the image base. */
     /* Again, we should probably refactor the code so that arguments have an
      * associated ip. */
-    /* FIXME #2: We should probably make it more obvious that something is relocated. */
     if (!comment) {
         int i;
         for (i = ip; i < ip+len; i++) {
@@ -141,12 +140,14 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
                 const struct reloc_pe *r = get_reloc(i, pe);
                 if (r->type == 0)
                     ;   /* not even a real relocation, just padding */
-                else if ((instr.op.arg0 == IMM || (instr.op.arg0 == RM && instr.modrm_reg == 8) || instr.op.arg0 == MOFFS16) && r->type == 3)
+                else if ((instr.op.arg0 == IMM || (instr.op.arg0 == RM && instr.modrm_reg == 8) || instr.op.arg0 == MOFFS16) && r->type == 3) {
                     /* 32-bit relocation on 32-bit imm */
-                    instr.arg0 -= pe->header.opt.ImageBase;
-                else if ((instr.op.arg1 == IMM || (instr.op.arg1 == RM && instr.modrm_reg == 8) || instr.op.arg1 == MOFFS16) && r->type == 3)
-                    instr.arg1 -= pe->header.opt.ImageBase;
-                else
+                    sprintf(temp_comment, "%x", instr.arg0 - pe->header.opt.ImageBase);
+                    comment = temp_comment;
+                } else if ((instr.op.arg1 == IMM || (instr.op.arg1 == RM && instr.modrm_reg == 8) || instr.op.arg1 == MOFFS16) && r->type == 3) {
+                    sprintf(temp_comment, "%x", instr.arg1 - pe->header.opt.ImageBase);
+                    comment = temp_comment;
+                } else
                     warn_at("unhandled relocation: type %d, instruction %02x %s\n",
                         r->type, instr.op.opcode, instr.op.name);
                 break;
