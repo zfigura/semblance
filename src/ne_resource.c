@@ -759,8 +759,6 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
     {
         word extended = read_word();
         word offset = read_word();
-        long cursor;
-        word flags;
 
         if (extended > 1) {
             warn("Unknown menu version %d\n",extended);
@@ -907,7 +905,6 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
          * Fortunately, the headers are different but the relevant information
          * is stored in the same bytes. */
         word count;
-        long cursor;
         fseek(f, 2*sizeof(word), SEEK_CUR);
         count = read_word();
         printf("    Resources: ");
@@ -932,7 +929,7 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
         fread(&header, sizeof(header), 1, f);
         if (header.value_length != 52)
             warn("Version header length is %d (expected 52).\n", header.value_length);
-        if (strcmp(header.string, "VS_VERSION_INFO"))
+        if (strcmp((char *)header.string, "VS_VERSION_INFO"))
             warn("Version header is %.16s (expected VS_VERSION_INFO).\n", header.string);
         if (header.magic != 0xfeef04bd)
             warn("Version magic number is 0x%08x (expected 0xfeef04bd).\n", header.magic);
@@ -958,6 +955,9 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
         cursor = ftell(f);
         info_length = read_word();
         value_length = read_word();
+        if (value_length != 0)
+            warn("Value length is nonzero: %04x\n", value_length);
+
         /* "type" is again omitted */
         if ((info_type = read_byte()) == 'S'){
             /* we have a StringFileInfo */
@@ -1057,6 +1057,8 @@ void print_rsrc(long start){
     while ((type_id = read_word())){
         count = read_word();
         resloader = read_dword();
+        if (resloader)
+            warn("resloader is nonzero: %08x\n", resloader);
         while (count--){
             fread(&rn, sizeof(rn), 1, f);
             cursor = ftell(f);
