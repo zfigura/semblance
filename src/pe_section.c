@@ -92,11 +92,25 @@ static const struct reloc_pe *get_reloc(word ip, const struct pe *pe) {
     return NULL;
 }
 
+static char *relocate_arg(struct instr *instr, struct arg *arg, const struct pe *pe) {
+    const struct reloc_pe *r = get_reloc(arg->ip, pe);
+    static char comment[10];
+
+    if (r->type == 0)
+        return NULL;    /* not even a real relocation, just padding */
+    else if (r->type == 3) {
+        if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == 8) || arg->type == MOFFS16) {
+            snprintf(comment, 10, "%x", arg->value - pe->header.opt.ImageBase);
+            return comment;
+        }
+    }
+
+    return NULL;
+}
+
 static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *out, const struct pe *pe) {
     struct instr instr = {0};
-    char arg0[32] = "", arg1[32] = "";
     unsigned len;
-    char temp_comment[9];
     char *comment = NULL;
     char ip_string[9];
     dword absip = ip;
@@ -116,52 +130,34 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     if (instr.op.opcode == 0xff && (instr.op.subcode == 2 || instr.op.subcode == 4)
         && instr.modrm_disp == DISP_16 && instr.modrm_reg == 8) {
         /* call/jmp to an absolute memory address */
-        comment = get_imported_name(instr.arg0, pe);
+        comment = get_imported_name(instr.args[0].value, pe);
     }
 
     /* check if we are referencing a named export */
     if (instr.op.arg0 == REL16 && !comment)
     {
-        comment = get_export_name(instr.arg0, pe);
+        comment = get_export_name(instr.args[0].value, pe);
         if (!comment)
         {
             /* Sometimes we have TWO levels of indirection—call to jmp to
              * relocated address. mingw-w64 does this. */
 
-            fseek(f, addr2offset(instr.arg0, pe), SEEK_SET);
+            fseek(f, addr2offset(instr.args[0].value, pe), SEEK_SET);
             if (read_byte() == 0xff && read_byte() == 0x25) /* absolute jmp */
                 comment = get_imported_name(read_dword(), pe);
         }
     }
 
-    /* Not an import or an export. Is it a regular relocation? If so, don't
-     * touch the comment, but adjust the address, since we prefer to print those
-     * relative to the image base. */
-    /* Again, we should probably refactor the code so that arguments have an
-     * associated ip. */
+    /* Not an import or an export. Is it a regular relocation? If so, adjust the
+     * comment, since we prefer to print addresses relative to the image base. */
     if (!comment) {
-        int i;
-        for (i = ip; i < ip+len; i++) {
-            if (sec->instr_flags[i - sec->address] & INSTR_RELOC) {
-                const struct reloc_pe *r = get_reloc(i, pe);
-                if (r->type == 0)
-                    ;   /* not even a real relocation, just padding */
-                else if ((instr.op.arg0 == IMM || (instr.op.arg0 == RM && instr.modrm_reg == 8) || instr.op.arg0 == MOFFS16) && r->type == 3) {
-                    /* 32-bit relocation on 32-bit imm */
-                    sprintf(temp_comment, "%x", instr.arg0 - pe->header.opt.ImageBase);
-                    comment = temp_comment;
-                } else if ((instr.op.arg1 == IMM || (instr.op.arg1 == RM && instr.modrm_reg == 8) || instr.op.arg1 == MOFFS16) && r->type == 3) {
-                    sprintf(temp_comment, "%x", instr.arg1 - pe->header.opt.ImageBase);
-                    comment = temp_comment;
-                } else
-                    warn_at("unhandled relocation: type %d, instruction %02x %s\n",
-                        r->type, instr.op.opcode, instr.op.name);
-                break;
-            }
-        }
+        if (instr.args[0].type && sec->instr_flags[instr.args[0].ip - sec->address] & INSTR_RELOC)
+            comment = relocate_arg(&instr, &instr.args[0], pe);
+        if (instr.args[1].type && sec->instr_flags[instr.args[1].ip - sec->address] & INSTR_RELOC)
+            comment = relocate_arg(&instr, &instr.args[1], pe);
     }
 
-    print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, arg0, arg1, comment);
+    print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment);
 
     return len;
 }
@@ -297,11 +293,11 @@ static void scan_segment(dword ip, struct pe *pe) {
         /* handle conditional and unconditional jumps */
         if (instr.op.flags & OP_BRANCH) {
             /* relative jump, loop, or call */
-            struct section *tsec = addr2section(instr.arg0, pe);
+            struct section *tsec = addr2section(instr.args[0].value, pe);
 
             if (tsec)
             {
-                dword trelip = instr.arg0 - tsec->address;
+                dword trelip = instr.args[0].value - tsec->address;
 
                 if (!strcmp(instr.op.name, "call"))
                     tsec->instr_flags[trelip] |= INSTR_FUNC;
@@ -309,9 +305,9 @@ static void scan_segment(dword ip, struct pe *pe) {
                     tsec->instr_flags[trelip] |= INSTR_JUMP;
     
                 /* scan it */
-                scan_segment(instr.arg0, pe);
+                scan_segment(instr.args[0].value, pe);
             } else
-                warn_at("Branch '%s' to byte %x not in image.\n", instr.op.name, instr.arg0);
+                warn_at("Branch '%s' to byte %x not in image.\n", instr.op.name, instr.args[0].value);
         }
 
         for (i = relip; i < relip+instr_length; i++) {

@@ -48,7 +48,6 @@ static void print_header(struct header_mz *header) {
 
 static int print_mz_instr(dword ip, byte *p, char *out, const byte *flags) {
     struct instr instr = {0};
-    char arg0[32] = {0}, arg1[32] = {0};
     unsigned len;
 
     char ip_string[7];
@@ -59,7 +58,7 @@ static int print_mz_instr(dword ip, byte *p, char *out, const byte *flags) {
 
     sprintf(ip_string, "%05x", ip);
 
-    print_instr(out, ip_string, p, len, flags[ip], &instr, arg0, arg1, NULL);
+    print_instr(out, ip_string, p, len, flags[ip], &instr, NULL);
 
     return len;
 }
@@ -145,12 +144,12 @@ static void scan_segment(dword ip, struct mz *mz) {
         if (instr.op.flags & OP_BRANCH) {
             /* near relative jump, loop, or call */
             if (!strcmp(instr.op.name, "call"))
-                mz->flags[instr.arg0] |= INSTR_FUNC;
+                mz->flags[instr.args[0].value] |= INSTR_FUNC;
             else
-                mz->flags[instr.arg0] |= INSTR_JUMP;
+                mz->flags[instr.args[0].value] |= INSTR_JUMP;
 
             /* scan it */
-            scan_segment(instr.arg0, mz);
+            scan_segment(instr.args[0].value, mz);
         }
 
         if (instr.op.flags & OP_STOP)

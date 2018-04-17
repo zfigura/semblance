@@ -69,8 +69,8 @@ struct reloc {
     byte type;
     word offset_count;
     word *offsets;
-    word target_segment;
-    word target_offset;
+    word tseg;
+    word toffset;
     char *text;
 };
 

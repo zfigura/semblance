@@ -1305,9 +1305,11 @@ static int get_0f_instr(const byte *p, struct instr *instr) {
  * ip      - [i] NOT current IP, but rather IP of the *argument*. This
  *               is necessary for REL16 to work right.
  * p       - [i] pointer to the current argument to be parsed
- * value   - [o] pointer to the output value
- * argtype - [i] type of argument being processed
- * instr   - [i/o] pointer to the relevant instr_info
+ * arg     - [i/o] pointer to the relevant arg struct
+ *      ->ip         [o]
+ *      ->value      [o]
+ *      ->type       [i]
+ * instr   - [i/o] pointer to the relevant instr struct
  *      ->prefix     [i]
  *      ->op         [i]
  *      ->modrm_disp [o]
@@ -1319,45 +1321,52 @@ static int get_0f_instr(const byte *p, struct instr *instr) {
  * Does not process specific arguments (e.g. registers, DSBX, ONE...)
  * The parameter out is given as a dword but may require additional casting.
  */
-static int get_arg(dword ip, const byte *p, dword *value, enum arg argtype, struct instr *instr, int is32) {
-    *value = 0;
+static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr, int is32) {
+    arg->value = 0;
 
-    switch (argtype) {
+    switch (arg->type) {
     case IMM8:
-        *value = *p;
+        arg->ip = ip;
+        arg->value = *p;
         return 1;
     case IMM16:
-        *value = *((word *) p);
+        arg->ip = ip;
+        arg->value = *((word *) p);
         return 2;
     case IMM:
+        arg->ip = ip;
         if (instr->op.size == 8)
-            *value = *p;
+            arg->value = *p;
         else if (instr->op.size == 16)
-            *value = *((word *) p);
+            arg->value = *((word *) p);
         else if (instr->op.size == 32)
-            *value = *((dword *) p);
+            arg->value = *((dword *) p);
         return instr->op.size / 8;
     case REL8:
-        *value = ip+1+*((int8_t *) p);  /* signed */
+        arg->ip = ip;
+        arg->value = ip+1+*((int8_t *) p);  /* signed */
         return 1;
     case REL16:
+        arg->ip = ip;
         /* Equivalently signed or unsigned (i.e. clipped) */
         if (is32) {
-            *value = (ip+4+*((dword *) p)) & 0xffffffff;
+            arg->value = (ip+4+*((dword *) p)) & 0xffffffff;
             return 4;
         } else {
-            *value = (ip+2+*((word *) p)) & 0xffff;
+            arg->value = (ip+2+*((word *) p)) & 0xffff;
             return 2;
         }
     case PTR32:
-        *value = *((word *) p); /* I think this should be enough */
+        arg->ip = ip;
+        arg->value = *((word *) p); /* I think this should be enough */
         return 4;
     case MOFFS16:
+        arg->ip = ip;
         if (is32) {
-            *value = *((dword *) p);
+            arg->value = *((dword *) p);
             return 4;
         } else {
-            *value = *((word *) p);
+            arg->value = *((word *) p);
             return 2;
         }
     case RM:
@@ -1375,6 +1384,8 @@ static int get_arg(dword ip, const byte *p, dword *value, enum arg argtype, stru
             return 1;
         }
 
+        arg->ip = ip;
+
         if (instr->addrsize == 32 && rm == 4) {
             /* SIB byte */
             p++;
@@ -1388,10 +1399,10 @@ static int get_arg(dword ip, const byte *p, dword *value, enum arg argtype, stru
         if (mod == 0 && ((instr->addrsize == 16 && rm == 6) ||
                          (instr->addrsize == 32 && rm == 5))) {
             if (instr->addrsize == 32) {
-                *value = *((dword *) (p+1));
+                arg->value = *((dword *) (p+1));
                 ret += 4;
             } else {
-                *value = *((word *) (p+1));
+                arg->value = *((word *) (p+1));
                 ret += 2;
             }
             instr->modrm_disp = DISP_16;
@@ -1400,16 +1411,16 @@ static int get_arg(dword ip, const byte *p, dword *value, enum arg argtype, stru
             instr->modrm_disp = DISP_NONE;
             instr->modrm_reg = rm;
         } else if (mod == 1) {
-            *value = *(p+1);
+            arg->value = *(p+1);
             instr->modrm_disp = DISP_8;
             instr->modrm_reg = rm;
             ret += 1;
         } else if (mod == 2) {
             if (instr->addrsize == 32) {
-                *value = *((dword *) (p+1));
+                arg->value = *((dword *) (p+1));
                 ret += 4;
             } else {
-                *value = *((word *) (p+1));
+                arg->value = *((word *) (p+1));
                 ret += 2;
             }
             instr->modrm_disp = DISP_16;
@@ -1424,14 +1435,14 @@ static int get_arg(dword ip, const byte *p, dword *value, enum arg argtype, stru
     case TR32:
     case MMX:
     case XMM:
-        *value = REGOF(*p);
+        arg->value = REGOF(*p);
         return 0;
     case REG32:
     case STX:
     case REGONLY:
     case MMXONLY:
     case XMMONLY:
-        *value = MEMOF(*p);
+        arg->value = MEMOF(*p);
         return 1;
     /* all others should be implicit */
     default:
@@ -1497,7 +1508,7 @@ static const char modrm16_masm[8][6] = {
 
 /* Figure out whether it's a register, so we know whether to dispense with size
  * indicators on a memory access. */
-static int is_reg(enum arg arg) {
+static int is_reg(enum argtype arg) {
     return ((arg >= AL && arg <= GS) || (arg >= REG && arg <= TR32));
 };
 
@@ -1511,24 +1522,21 @@ static int is_reg(enum arg arg) {
 
 /* With MASM/NASM, use capital letters to help disambiguate them from the following 'h'. */
 
-/* Parameters:
- * ip      - [i] current instruction (used for printing warn string)
- * out     - [o] pointer to the output (string) buffer
- * value   - [i] value of argument being processed
- * argtype - [i] type of argument being processed
- * instr   - [i] pointer to the relevant instr_info
- */
-static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct instr *instr) {
-    *out = '\0';
+static void print_arg(char *ip, struct instr *instr, int i) {
+    struct arg *arg = &instr->args[i];
+    char *out = arg->string;
+    dword value = arg->value;
 
-    if (argtype >= AL && argtype <= BH)
-        get_reg8(out, argtype-AL);
-    else if (argtype >= AX && argtype <= DI)
-        get_reg16(out, argtype-AX, (instr->op.size == 32));
-    else if (argtype >= ES && argtype <= GS)
-        get_seg16(out, argtype-ES);
+    if (arg->string[0]) return; /* someone wants to print something special */
 
-    switch (argtype) {
+    if (arg->type >= AL && arg->type <= BH)
+        get_reg8(out, arg->type-AL);
+    else if (arg->type >= AX && arg->type <= DI)
+        get_reg16(out, arg->type-AX, (instr->op.size == 32));
+    else if (arg->type >= ES && arg->type <= GS)
+        get_seg16(out, arg->type-ES);
+
+    switch (arg->type) {
     case ONE:
         strcat(out, (asm_syntax == GAS) ? "$0x1" : "1h");
         break;
@@ -1593,7 +1601,7 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
             strcat(out, (asm_syntax == GAS) ? "(%" : "[");
             if (instr->prefix & PREFIX_ADDR32)
                 strcat(out, "e");
-            strcat(out, (argtype == DSBX) ? "bx" : "si");
+            strcat(out, (arg->type == DSBX) ? "bx" : "si");
             strcat(out, (asm_syntax == GAS) ? ")" : "]");
         }
         instr->usedmem = 1;
@@ -1631,17 +1639,17 @@ static void print_arg(char *ip, char *out, dword value, enum arg argtype, struct
     case MM:
     case XM:
         if (instr->modrm_disp == DISP_REG) {
-            if (argtype == XM) {
+            if (arg->type == XM) {
                 get_xmm(out, instr->modrm_reg);
                 if (instr->vex_256)
                     out[asm_syntax == GAS ? 1 : 0] = 'y';
                 break;
-            } else if (argtype == MM) {
+            } else if (arg->type == MM) {
                 get_mmx(out, instr->modrm_reg);
                 break;
             }
 
-            if (argtype == MEM)
+            if (arg->type == MEM)
                 warn_at("ModRM byte has mod 3, but opcode only allows accessing memory.\n");
 
             if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) /* mov*b* */
@@ -1973,21 +1981,32 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
     if (instr->op.arg0) {
         int base = len;
 
-        len += get_arg(ip+len, &p[len], &instr->arg0, instr->op.arg0, instr, is32);
+        instr->args[0].type = instr->op.arg0;
+        instr->args[1].type = instr->op.arg1;
+
+        /* The convention is that an arg whose value is one or more bytes has
+         * IP pointing to that value, but otherwise it points to the beginning
+         * of the instruction. This way, we'll never think that e.g. a register
+         * value is supposed to be relocated. */
+        instr->args[0].ip = instr->args[1].ip = instr->args[2].ip = ip;
+
+        len += get_arg(ip+len, &p[len], &instr->args[0], instr, is32);
 
         /* registers that read from the modrm byte, which we might have just processed */
         if (instr->op.arg1 >= REG && instr->op.arg1 <= TR32)
-            get_arg(ip+len, &p[base], &instr->arg1, instr->op.arg1, instr, is32);
+            get_arg(ip+len, &p[base], &instr->args[1], instr, is32);
         else
-            len += get_arg(ip+len, &p[len], &instr->arg1, instr->op.arg1, instr, is32);
+            len += get_arg(ip+len, &p[len], &instr->args[1], instr, is32);
 
         /* arg2 */
         if (instr->op.flags & OP_ARG2_IMM)
-            len += get_arg(ip+len, &p[len], &instr->arg2, IMM, instr, is32);
+            instr->args[2].type = IMM;
         else if (instr->op.flags & OP_ARG2_IMM8)
-            len += get_arg(ip+len, &p[len], &instr->arg2, IMM8, instr, is32);
+            instr->args[2].type = IMM8;
         else if (instr->op.flags & OP_ARG2_CL)
-            len += get_arg(ip+len, &p[len], &instr->arg2, CL, instr, is32);
+            instr->args[2].type = CL;
+
+        len += get_arg(ip+len, &p[len], &instr->args[2], instr, is32);
     }
 
     /* modify the instruction name if appropriate */
@@ -2009,10 +2028,10 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
         strcpy(instr->op.name, "cdq");
     else if (instr->op.opcode == 0xE3 && (instr->prefix & PREFIX_ADDR32))
         strcpy(instr->op.name, "jecxz");
-    else if (instr->op.opcode == 0xD4 && instr->arg0 == 10) {
+    else if (instr->op.opcode == 0xD4 && instr->args[0].value == 10) {
         strcpy(instr->op.name, "aam");
         instr->op.arg0 = NONE;
-    } else if (instr->op.opcode == 0xD5 && instr->arg0 == 10) {
+    } else if (instr->op.opcode == 0xD5 && instr->args[0].value == 10) {
         strcpy(instr->op.name, "aad");
         instr->op.arg0 = NONE;
     } else if (asm_syntax == GAS) {
@@ -2051,21 +2070,14 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
     return len;
 }
 
-void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, char *arg0, char *arg1, char *comment) {
-    char arg2[32] = "";
+void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment) {
     int i;
 
     /* get the arguments */
 
-    if (!arg0[0]) print_arg(ip, arg0, instr->arg0, instr->op.arg0, instr);
-    if (!arg1[0]) print_arg(ip, arg1, instr->arg1, instr->op.arg1, instr);
-
-    if (instr->op.flags & OP_ARG2_IMM)
-        print_arg(ip, arg2, instr->arg2, IMM, instr);
-    else if (instr->op.flags & OP_ARG2_IMM8)
-        print_arg(ip, arg2, instr->arg2, IMM8, instr);
-    else if (instr->op.flags & OP_ARG2_CL)
-        print_arg(ip, arg2, instr->arg2, CL, instr);
+    print_arg(ip, instr, 0);
+    print_arg(ip, instr, 1);
+    print_arg(ip, instr, 2);
 
     /* did we find too many prefixes? */
     if (get_prefix(instr->op.opcode)) {
@@ -2153,30 +2165,30 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
         out += sprintf(out, "v");
     out += sprintf(out, "%s", instr->op.name);
 
-    if (arg0[0] || arg1[0])
+    if (instr->args[0].string[0] || instr->args[1].string[0])
         out += sprintf(out,"\t");
 
     if (asm_syntax == GAS) {
         /* fixme: are all of these orderings correct? */
-        if (arg1[0])
-            out += sprintf(out, "%s,", arg1);
+        if (instr->args[1].string[0])
+            out += sprintf(out, "%s,", instr->args[1].string);
         if (instr->vex_reg)
             out += sprintf(out, "%%ymm%d, ", instr->vex_reg);
-        if (arg0[0])
-            out += sprintf(out, "%s", arg0);
-        if (arg2[0])
-            out += sprintf(out, ",%s", arg2);
+        if (instr->args[0].string[0])
+            out += sprintf(out, "%s", instr->args[0].string);
+        if (instr->args[2].string[0])
+            out += sprintf(out, ",%s", instr->args[2].string);
     } else {
-        if (arg0[0])
-            out += sprintf(out, "%s", arg0);
-        if (arg0[0] && arg1[0])
+        if (instr->args[0].string[0])
+            out += sprintf(out, "%s", instr->args[0].string);
+        if (instr->args[1].string[0])
             out += sprintf(out, ", ");
         if (instr->vex_reg)
             out += sprintf(out, "ymm%d, ", instr->vex_reg);
-        if (arg1[0])
-            out += sprintf(out, "%s", arg1);
-        if (arg2[0])
-            out += sprintf(out, ", %s", arg2);
+        if (instr->args[1].string[0])
+            out += sprintf(out, "%s", instr->args[1].string);
+        if (instr->args[2].string[0])
+            out += sprintf(out, ", %s", instr->args[2].string);
     }
     if (comment) {
         out += sprintf(out, asm_syntax == GAS ? "\t// " : "\t;");

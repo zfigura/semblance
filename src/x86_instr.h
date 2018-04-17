@@ -3,7 +3,7 @@
 
 #include "semblance.h"
 
-enum arg {
+enum argtype {
     NONE = 0,
 
     /* the literal value 1, used for bit shift ops */
@@ -76,8 +76,8 @@ struct op {
     byte subcode;
     byte size;  /* one of: 8, 16, 32, 64, 80, or 0 if not sized */
     char name[11];
-    enum arg arg0; /* usually dest */
-    enum arg arg1; /* usually src */
+    enum argtype arg0; /* usually dest */
+    enum argtype arg1; /* usually src */
     /* arg2 only for imul, shrd, shld */
     dword flags;
 };
@@ -106,12 +106,17 @@ enum disptype {
 
 extern const char seg16[6][3];
 
+struct arg {
+    char string[32];
+    dword ip;
+    dword value;
+    enum argtype type;
+};
+
 struct instr {
     word prefix;
     struct op op;
-    dword arg0;
-    dword arg1;
-    dword arg2;
+    struct arg args[3];
     byte addrsize;
     enum disptype modrm_disp;
     byte modrm_reg;
@@ -125,7 +130,7 @@ struct instr {
 };
 
 extern int get_instr(dword ip, const byte *p, struct instr *instr, int is32);
-extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, char *arg0, char *arg1, char *comment);
+extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment);
 
 /* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
 #define MAX_INSTR       16

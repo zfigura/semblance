@@ -48,14 +48,13 @@ static char *get_entry_name(word cs, word ip, const struct ne *ne) {
 }
 
 /* index function */
-static const struct reloc *get_reloc(word cs, word ip, const struct reloc *reloc_data, word reloc_count) {
+static const struct reloc *get_reloc(const struct segment *seg, word ip) {
     unsigned i, o;
-    for (i=0; i<reloc_count; i++) {
-        for (o=0; o<reloc_data[i].offset_count; o++)
-            if (reloc_data[i].offsets[o] == ip)
-                return &reloc_data[i];
+    for (i = 0; i < seg->reloc_count; i++) {
+        for (o = 0; o < seg->reloc_table[i].offset_count; o++)
+            if (seg->reloc_table[i].offsets[o] == ip)
+                return &seg->reloc_table[i];
     }
-    warn_at("Byte tagged INSTR_RELOC has no reloc; this is a bug.\n");
     return NULL;
 }
 
@@ -69,15 +68,68 @@ static char *get_imported_name(word module, word ordinal, const struct ne *ne) {
     return NULL;
 }
 
+/* Tweak the inline string and return the comment. */
+static const char *relocate_arg(const struct segment *seg, struct arg *arg, const struct ne *ne)
+{
+    const struct reloc *r = get_reloc(seg, arg->ip);
+    char *module;
+
+    if (!r && arg->type == PTR32) r = get_reloc(seg, arg->ip+2);
+    if (!r) {
+        warn("%x: Byte tagged INSTR_RELOC has no reloc attached; this is a bug.\n", arg->ip);
+        return "?";
+    }
+
+    if (r->type == 1 || r->type == 2)
+        module = ne->imptab[r->tseg-1].name;
+
+    if (arg->type == PTR32 && r->size == 3) {
+        /* 32-bit relocation on 32-bit pointer, so just copy the name */
+        if (r->type == 0) {
+            snprintf(arg->string, sizeof(arg->string), "%d:%04x", r->tseg, r->toffset);
+            return r->text;
+        } else if (r->type == 1) {
+            snprintf(arg->string, sizeof(arg->string), "%s.%d", module, r->toffset);
+            return get_imported_name(r->tseg, r->toffset, ne);
+        } else if (r->type == 2) {
+            snprintf(arg->string, sizeof(arg->string), "%s.%.*s", module,
+                ne->nametab[r->toffset], &ne->nametab[r->toffset+1]);
+            return NULL;
+        }
+    } else if (arg->type == PTR32 && r->size == 2 && r->type == 0) {
+        /* segment relocation on 32-bit pointer; copy the segment but keep the
+         * offset */
+        snprintf(arg->string, sizeof(arg->string), "%d:%04x", r->tseg, arg->value);
+        return get_entry_name(r->tseg, arg->value, ne);
+    } else if (arg->type == IMM && (r->size == 2 || r->size == 5)) {
+        /* imm16 referencing a segment or offset directly */
+        const char *pfx = (r->size == 2 ? "seg " : "");
+        if (r->type == 0) {
+            snprintf(arg->string, sizeof(arg->string), "%s%d", pfx, r->tseg);
+            return NULL;
+        } else if (r->type == 1) {
+            snprintf(arg->string, sizeof(arg->string), "%s%s.%d", pfx, module, r->toffset);
+            return get_imported_name(r->tseg, r->toffset, ne);
+        } else if (r->type == 2) {
+            snprintf(arg->string, sizeof(arg->string), "%s%s.%.*s", pfx, module,
+                ne->nametab[r->toffset], &ne->nametab[r->toffset+1]);
+            return NULL;
+        }
+    }
+
+    warn("%x: unhandled relocation: size %d, type %d, argtype %x\n",
+        arg->ip, r->size, r->type, arg->type);
+
+    return NULL;
+}
+
 /* Returns the number of bytes processed (same as get_instr). */
 static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out, const struct ne *ne) {
     word cs = seg->cs;
     struct instr instr = {0};
-    char arg0[32] = "", arg1[32] = "";
     unsigned len;
 
-    unsigned i;
-    char *comment = NULL;
+    const char *comment = NULL;
     char ip_string[10];
 
     out[0] = 0;
@@ -86,78 +138,20 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
 
     sprintf(ip_string, "%3d:%04x", seg->cs, ip);
 
-    /* check for relocations. ideally this should be done per argument, but
-     * this would require annoying refactoring of the code. there should only
-     * be one relocation per instruction anyway so don't bother. */
-    for (i = ip; i < ip+len; i++) {
-        if (seg->instr_flags[i] & INSTR_RELOC) {
-            const struct reloc *r = get_reloc(seg->cs, i, seg->reloc_table, seg->reloc_count);
-            if (!r) break;
-            char *module;
-            if (r->type == 1 || r->type == 2)
-                module = ne->imptab[r->target_segment-1].name;
-
-            if (instr.op.arg0 == PTR32 && r->size == 3) {
-                /* 32-bit relocation on 32-bit pointer, so just copy the name as appropriate */
-                if (r->type == 0) {
-                    sprintf(arg0, "%d:%04x", r->target_segment, r->target_offset);
-                    comment = r->text;
-                } else if (r->type == 1) {
-                    snprintf(arg0, sizeof(arg0), "%s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
-                } else if (r->type == 2)
-                    snprintf(arg0, sizeof(arg0), "%s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
-            } else if (instr.op.arg0 == PTR32 && r->size == 2 && r->type == 0) {
-                /* segment relocation on 32-bit pointer; copy the segment but keep the offset */
-                sprintf(arg0, "%d:%04x", r->target_segment, instr.arg0);
-                comment = get_entry_name(r->target_segment, instr.arg0, ne);
-            } else if (instr.op.arg0 == IMM && r->size == 2) {
-                /* imm16 referencing a segment directly */
-                if (r->type == 0)
-                    sprintf(arg0, "seg %d", r->target_segment);
-                else if (r->type == 1) {
-                    snprintf(arg0, sizeof(arg0), "seg %s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
-                } else if (r->type == 2)
-                    snprintf(arg0, sizeof(arg0), "seg %s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
-            } else if (instr.op.arg1 == IMM && r->size == 2) {
-                /* same as above wrt arg1 */
-                if (r->type == 0)
-                    sprintf(arg1, "seg %d", r->target_segment);
-                else if (r->type == 1) {
-                    snprintf(arg1, sizeof(arg1), "seg %s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
-                } else if (r->type == 2)
-                    snprintf(arg1, sizeof(arg1), "seg %s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
-            } else if (instr.op.arg0 == IMM && r->size == 5) {
-                /* imm16 referencing an offset directly. MASM doesn't have a prefix for this
-                 * and I don't personally think it should be necessary either. */
-                if (r->type == 0)
-                    sprintf(arg0, "%04x", r->target_offset);
-                else if (r->type == 1) {
-                    snprintf(arg0, sizeof(arg0), "%s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
-                } else if (r->type == 2)
-                    snprintf(arg0, sizeof(arg0), "%s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
-            } else if (instr.op.arg1 == IMM && r->size == 5) {
-                /* same as above wrt arg1 */
-                if (r->type == 0)
-                    sprintf(arg1, "%04x", r->target_offset);
-                else if (r->type == 1) {
-                    snprintf(arg1, sizeof(arg1), "%s.%d", module, r->target_offset); // fixme please
-                    comment = get_imported_name(r->target_segment, r->target_offset, ne);
-                } else if (r->type == 2)
-                    snprintf(arg1, sizeof(arg1), "%s.%.*s", module, ne->nametab[r->target_offset], &ne->nametab[r->target_offset+1]);
-            } else
-                warn_at("unhandled relocation: size %d, type %d, instruction %02x %s\n", r->size, r->type, instr.op.opcode, instr.op.name);
-        }
-    }
+    /* check for relocations */
+    if (seg->instr_flags[instr.args[0].ip] & INSTR_RELOC)
+        comment = relocate_arg(seg, &instr.args[0], ne);
+    if (seg->instr_flags[instr.args[1].ip] & INSTR_RELOC)
+        comment = relocate_arg(seg, &instr.args[1], ne);
+    /* make sure to check for PTR32 segment-only relocations */
+    if (instr.op.arg0 == PTR32 && seg->instr_flags[instr.args[0].ip+2] & INSTR_RELOC)
+        comment = relocate_arg(seg, &instr.args[0], ne);
 
     /* check if we are referencing a named export */
-    if (instr.op.arg0 == REL16 && !comment)
-        comment = get_entry_name(cs, instr.arg0, ne);
+    if (!comment && instr.op.arg0 == REL16)
+        comment = get_entry_name(cs, instr.args[0].value, ne);
 
-    print_instr(out, ip_string, p, len, seg->instr_flags[ip], &instr, arg0, arg1, comment);
+    print_instr(out, ip_string, p, len, seg->instr_flags[ip], &instr, comment);
 
     return len;
 };
@@ -276,30 +270,30 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
         if (instr.op.arg0 == PTR32) {
             for (i = ip; i < ip+instr_length; i++) {
                 if (seg->instr_flags[i] & INSTR_RELOC) {
-                    const struct reloc *r = get_reloc(cs, i, seg->reloc_table, seg->reloc_count);
+                    const struct reloc *r = get_reloc(seg, i);
                     const struct segment *tseg;
 
                     if (!r) break;
-                    tseg = &ne->segments[r->target_segment-1];
+                    tseg = &ne->segments[r->tseg-1];
 
                     if (r->type != 0) break;
 
                     if (r->size == 3) {
                         /* 32-bit relocation on 32-bit pointer */
-                        tseg->instr_flags[r->target_offset] |= INSTR_FAR;
+                        tseg->instr_flags[r->toffset] |= INSTR_FAR;
                         if (!strcmp(instr.op.name, "call"))
-                            tseg->instr_flags[r->target_offset] |= INSTR_FUNC;
+                            tseg->instr_flags[r->toffset] |= INSTR_FUNC;
                         else
-                            tseg->instr_flags[r->target_offset] |= INSTR_JUMP;
-                        scan_segment(r->target_segment, r->target_offset, ne);
+                            tseg->instr_flags[r->toffset] |= INSTR_JUMP;
+                        scan_segment(r->tseg, r->toffset, ne);
                     } else if (r->size == 2) {
                         /* segment relocation on 32-bit pointer */
-                        tseg->instr_flags[instr.arg0] |= INSTR_FAR;
+                        tseg->instr_flags[instr.args[0].value] |= INSTR_FAR;
                         if (!strcmp(instr.op.name, "call"))
-                            tseg->instr_flags[instr.arg0] |= INSTR_FUNC;
+                            tseg->instr_flags[instr.args[0].value] |= INSTR_FUNC;
                         else
-                            tseg->instr_flags[instr.arg0] |= INSTR_JUMP;
-                        scan_segment(r->target_segment, instr.arg0, ne);
+                            tseg->instr_flags[instr.args[0].value] |= INSTR_JUMP;
+                        scan_segment(r->tseg, instr.args[0].value, ne);
                     }
 
                     break;
@@ -308,12 +302,12 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
         } else if (instr.op.flags & OP_BRANCH) {
             /* near relative jump, loop, or call */
             if (!strcmp(instr.op.name, "call"))
-                seg->instr_flags[instr.arg0] |= INSTR_FUNC;
+                seg->instr_flags[instr.args[0].value] |= INSTR_FUNC;
             else
-                seg->instr_flags[instr.arg0] |= INSTR_JUMP;
+                seg->instr_flags[instr.args[0].value] |= INSTR_JUMP;
 
             /* scan it */
-            scan_segment(cs, instr.arg0, ne);
+            scan_segment(cs, instr.args[0].value, ne);
         }
 
         if (instr.op.flags & OP_STOP)
@@ -374,25 +368,25 @@ static void read_reloc(const struct segment *seg, struct reloc *r, struct ne *ne
         char *name;
 
         if (module == 0xff) {
-            r->target_segment = ne->enttab[ordinal-1].segment;
-            r->target_offset = ne->enttab[ordinal-1].offset;
+            r->tseg = ne->enttab[ordinal-1].segment;
+            r->toffset = ne->enttab[ordinal-1].offset;
         } else {
-            r->target_segment = module;
-            r->target_offset = ordinal;
+            r->tseg = module;
+            r->toffset = ordinal;
         }
 
         /* grab the name, if we can */
-        if ((name = get_entry_name(r->target_segment, r->target_offset, ne)))
+        if ((name = get_entry_name(r->tseg, r->toffset, ne)))
             r->text = name;
     } else if ((type & 3) == 1) {
         /* imported ordinal */
 
-        r->target_segment = module;
-        r->target_offset = ordinal;
+        r->tseg = module;
+        r->toffset = ordinal;
     } else if ((type & 3) == 2) {
         /* imported name */
-        r->target_segment = module;
-        r->target_offset = ordinal;
+        r->tseg = module;
+        r->toffset = ordinal;
     } else if ((type & 3) == 3) {
         /* OSFIXUP */
         /* FIXME: the meaning of this is not understood! */
