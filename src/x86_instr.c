@@ -1599,13 +1599,16 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         return 2;
     case IMM:
         arg->ip = ip;
-        if (instr->op.size == 8)
+        if (instr->op.size == 8) {
             arg->value = *p;
-        else if (instr->op.size == 16)
+            return 1;
+        } else if (instr->op.size == 16) {
             arg->value = *((word *) p);
-        else if (instr->op.size == 32)
+            return 2;
+        } else {
             arg->value = *((dword *) p);
-        return instr->op.size / 8;
+            return 4;
+        }
     case REL8:
         arg->ip = ip;
         arg->value = ip+1+*((int8_t *) p);  /* signed */
@@ -1838,7 +1841,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                 sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
             else if (instr->op.size == 16)
                 sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
-            else if (instr->op.size == 32)
+            else
                 sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "%08Xh", value);
         }
         break;
