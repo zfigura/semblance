@@ -99,7 +99,7 @@ static char *relocate_arg(struct instr *instr, struct arg *arg, const struct pe 
     if (r->type == 0)
         return NULL;    /* not even a real relocation, just padding */
     else if (r->type == 3) {
-        if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == 8) || arg->type == MOFFS16) {
+        if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == -1) || arg->type == MOFFS16) {
             snprintf(comment, 10, "%lx", arg->value - pe->opt32.ImageBase);
             return comment;
         }
@@ -129,7 +129,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
      * and relocated according to the contents of .reloc. */
 
     if (instr.op.opcode == 0xff && (instr.op.subcode == 2 || instr.op.subcode == 4)
-        && instr.modrm_disp == DISP_16 && instr.modrm_reg == 8) {
+        && instr.modrm_disp == DISP_16 && instr.modrm_reg == -1) {
         /* call/jmp to an absolute memory address */
         comment = get_imported_name(instr.args[0].value, pe);
     }

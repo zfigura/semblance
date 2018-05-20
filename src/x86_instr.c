@@ -1653,7 +1653,7 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
 
         arg->ip = ip;
 
-        if (instr->addrsize == 32 && rm == 4) {
+        if (instr->addrsize != 16 && rm == 4) {
             /* SIB byte */
             p++;
             instr->sib_scale = 1 << MODOF(*p);
@@ -1663,8 +1663,14 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             ret++;
         }
 
-        if (mod == 0 && ((instr->addrsize == 16 && rm == 6) ||
-                         (instr->addrsize == 32 && rm == 5))) {
+        if (mod == 0 && bits == 64 && rm == 5) {
+            /* IP-relative addressing... */
+            arg->value = *((dword *) (p+1));
+            instr->modrm_disp = DISP_16;
+            instr->modrm_reg = 16;
+            ret += 4;
+        } else if (mod == 0 && ((instr->addrsize == 16 && rm == 6) ||
+                                (instr->addrsize == 32 && rm == 5))) {
             if (instr->addrsize == 32) {
                 arg->value = *((dword *) (p+1));
                 ret += 4;
@@ -1673,7 +1679,7 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
                 ret += 2;
             }
             instr->modrm_disp = DISP_16;
-            instr->modrm_reg = 8;
+            instr->modrm_reg = -1;
         } else if (mod == 0) {
             instr->modrm_disp = DISP_NONE;
             instr->modrm_reg = rm;
@@ -1725,8 +1731,8 @@ static const char reg8[8][3] = {
     "al","cl","dl","bl","ah","ch","dh","bh"
 };
 
-static const char reg16[9][3] = {
-    "ax","cx","dx","bx","sp","bp","si","di",""
+static const char reg16[17][3] = {
+    "ax","cx","dx","bx","sp","bp","si","di","8","9","10","11","12","13","14","15","ip"
 };
 
 static void get_seg16(char *out, byte reg) {
@@ -1742,7 +1748,7 @@ static void get_reg8(char *out, byte reg) {
 }
 
 static void get_reg16(char *out, byte reg, int size) {
-    if (reg <= 7) {
+    if (reg != -1) {
         if (asm_syntax == GAS)
             strcat(out, "%");
         if (size == 32)
@@ -1955,7 +1961,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                     sprintf(out+strlen(out), "0x%02x", svalue);
             } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 16) {
                 int16_t svalue = (int16_t) value;
-                if (instr->modrm_reg == 8) {
+                if (instr->modrm_reg == -1) {
                     sprintf(out+strlen(out), "0x%04x", value);  /* absolute memory is unsigned */
                     return;
                 }
@@ -1963,9 +1969,9 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                     sprintf(out+strlen(out), "-0x%04x", -svalue);
                 else
                     sprintf(out+strlen(out), "0x%04x", svalue);
-            } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 32) {
+            } else if (instr->modrm_disp == DISP_16) {
                 int32_t svalue = (int32_t) value;
-                if (instr->modrm_reg == 8) {
+                if (instr->modrm_reg == -1) {
                     sprintf(out+strlen(out), "0x%08x", value);  /* absolute memory is unsigned */
                     return;
                 }
@@ -2025,7 +2031,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             if (asm_syntax == MASM)
                 strcat(out, "[");
 
-            if (instr->modrm_reg < 8) {
+            if (instr->modrm_reg != -1) {
                 if (instr->addrsize == 16)
                     strcat(out, modrm16_masm[instr->modrm_reg]);
                 else
@@ -2048,15 +2054,15 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                     sprintf(out+strlen(out), "+%02Xh", svalue);
             } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 16) {
                 int16_t svalue = (int16_t) value;
-                if (instr->modrm_reg == 8 && !has_sib)
+                if (instr->modrm_reg == -1 && !has_sib)
                     sprintf(out+strlen(out), "%04Xh", value);   /* absolute memory is unsigned */
                 else if (svalue < 0)
                     sprintf(out+strlen(out), "-%04Xh", -svalue);
                 else
                     sprintf(out+strlen(out), "+%04Xh", svalue);
-            } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 32) {
+            } else if (instr->modrm_disp == DISP_16) {
                 int32_t svalue = (int32_t) value;
-                if (instr->modrm_reg == 8 && !has_sib)
+                if (instr->modrm_reg == -1 && !has_sib)
                     sprintf(out+strlen(out), "%08Xh", value);   /* absolute memory is unsigned */
                 else if (svalue < 0)
                     sprintf(out+strlen(out), "-%08Xh", -svalue);
