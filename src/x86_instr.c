@@ -287,6 +287,265 @@ static const struct op instructions[256] = {
     {0xFF, 8},  /* group #5 */
 };
 
+static const struct op instructions64[256] = {
+    {0x00, 8,  8, "add",        RM,     REG,    OP_LOCK},
+    {0x01, 8, 16, "add",        RM,     REG,    OP_LOCK},
+    {0x02, 8,  8, "add",        REG,    RM},
+    {0x03, 8, 16, "add",        REG,    RM},
+    {0x04, 8,  8, "add",        AL,     IMM},
+    {0x05, 8, 16, "add",        AX,     IMM},
+    {0x06, 8},  /* undefined (was push es) */
+    {0x07, 8},  /* undefined (was pop es) */
+    {0x08, 8,  8, "or",         RM,     REG,    OP_LOCK},
+    {0x09, 8, 16, "or",         RM,     REG,    OP_LOCK},
+    {0x0A, 8,  8, "or",         REG,    RM},
+    {0x0B, 8, 16, "or",         REG,    RM},
+    {0x0C, 8,  8, "or",         AL,     IMM},
+    {0x0D, 8, 16, "or",         AX,     IMM},
+    {0x0E, 8},  /* undefined (was push cs) */
+    {0x0F, 8},  /* two-byte codes */
+    {0x10, 8,  8, "adc",        RM,     REG,    OP_LOCK},
+    {0x11, 8, 16, "adc",        RM,     REG,    OP_LOCK},
+    {0x12, 8,  8, "adc",        REG,    RM},
+    {0x13, 8, 16, "adc",        REG,    RM},
+    {0x14, 8,  8, "adc",        AL,     IMM},
+    {0x15, 8, 16, "adc",        AX,     IMM},
+    {0x16, 8},  /* undefined (was push ss) */
+    {0x17, 8},  /* undefined (was pop ss) */
+    {0x18, 8,  8, "sbb",        RM,     REG,    OP_LOCK},
+    {0x19, 8, 16, "sbb",        RM,     REG,    OP_LOCK},
+    {0x1A, 8,  8, "sbb",        REG,    RM},
+    {0x1B, 8, 16, "sbb",        REG,    RM},
+    {0x1C, 8,  8, "sbb",        AL,     IMM},
+    {0x1D, 8, 16, "sbb",        AX,     IMM},
+    {0x1E, 8},  /* undefined (was push ds) */
+    {0x1F, 8},  /* undefined (was pop ds) */
+    {0x20, 8,  8, "and",        RM,     REG,    OP_LOCK},
+    {0x21, 8, 16, "and",        RM,     REG,    OP_LOCK},
+    {0x22, 8,  8, "and",        REG,    RM},
+    {0x23, 8, 16, "and",        REG,    RM},
+    {0x24, 8,  8, "and",        AL,     IMM},
+    {0x25, 8, 16, "and",        AX,     IMM},
+    {0x26, 8},  /* undefined (was es:) */
+    {0x27, 8},  /* undefined (was daa) */
+    {0x28, 8,  8, "sub",        RM,     REG,    OP_LOCK},
+    {0x29, 8, 16, "sub",        RM,     REG,    OP_LOCK},
+    {0x2A, 8,  8, "sub",        REG,    RM},
+    {0x2B, 8, 16, "sub",        REG,    RM},
+    {0x2C, 8,  8, "sub",        AL,     IMM},
+    {0x2D, 8, 16, "sub",        AX,     IMM},
+    {0x2E, 8},  /* undefined (was cs:) */
+    {0x2F, 8},  /* undefined (was das) */
+    {0x30, 8,  8, "xor",        RM,     REG,    OP_LOCK},
+    {0x31, 8, 16, "xor",        RM,     REG,    OP_LOCK},
+    {0x32, 8,  8, "xor",        REG,    RM},
+    {0x33, 8, 16, "xor",        REG,    RM},
+    {0x34, 8,  8, "xor",        AL,     IMM},
+    {0x35, 8, 16, "xor",        AX,     IMM},
+    {0x36, 8},  /* undefined (was ss:) */
+    {0x37, 8},  /* undefined (was aaa) */
+    {0x38, 8,  8, "cmp",        RM,     REG},
+    {0x39, 8, 16, "cmp",        RM,     REG},
+    {0x3A, 8,  8, "cmp",        REG,    RM},
+    {0x3B, 8, 16, "cmp",        REG,    RM},
+    {0x3C, 8,  8, "cmp",        AL,     IMM},
+    {0x3D, 8, 16, "cmp",        AX,     IMM},
+    {0x3E, 8},  /* undefined (was ds:) */
+    {0x3F, 8},  /* undefined (was aas) */
+    {0x40, 8, 16, "rex"},
+    {0x41, 8, 16, "rex.B"},
+    {0x42, 8, 16, "rex.X"},
+    {0x43, 8, 16, "rex.XB"},
+    {0x44, 8, 16, "rex.R"},
+    {0x45, 8, 16, "rex.RB"},
+    {0x46, 8, 16, "rex.RX"},
+    {0x47, 8, 16, "rex.RXB"},
+    {0x48, 8, 16, "rex.W"},
+    {0x49, 8, 16, "rex.WB"},
+    {0x4A, 8, 16, "rex.WX"},
+    {0x4B, 8, 16, "rex.WXB"},
+    {0x4C, 8, 16, "rex.WR"},
+    {0x4D, 8, 16, "rex.WRB"},
+    {0x4E, 8, 16, "rex.WRX"},
+    {0x4F, 8, 16, "rex.WRXB"},
+    {0x50, 8, 16, "push",       AX},
+    {0x51, 8, 16, "push",       CX},
+    {0x52, 8, 16, "push",       DX},
+    {0x53, 8, 16, "push",       BX},
+    {0x54, 8, 16, "push",       SP},
+    {0x55, 8, 16, "push",       BP},
+    {0x56, 8, 16, "push",       SI},
+    {0x57, 8, 16, "push",       DI},
+    {0x58, 8, 16, "pop",        AX},
+    {0x59, 8, 16, "pop",        CX},
+    {0x5A, 8, 16, "pop",        DX},
+    {0x5B, 8, 16, "pop",        BX},
+    {0x5C, 8, 16, "pop",        SP},
+    {0x5D, 8, 16, "pop",        BP},
+    {0x5E, 8, 16, "pop",        SI},
+    {0x5F, 8, 16, "pop",        DI},
+    {0x60, 8},  /* undefined (was pusha) */
+    {0x61, 8},  /* undefined (was popa) */
+    {0x62, 8},  /* undefined (was bound) */
+    {0x63, 8, 16, "movsx",      REG,    RM},
+    {0x64, 8,  0, "fs"},  /* FS prefix */
+    {0x65, 8,  0, "gs"},  /* GS prefix */
+    {0x66, 8,  0, "data"},  /* op-size prefix */
+    {0x67, 8,  0, "addr"},  /* addr-size prefix */
+    {0x68, 8, 16, "push",       IMM,    0,      OP_STACK},
+    {0x69, 8, 16, "imul",       REG,    RM,     OP_ARG2_IMM},
+    {0x6A, 8, 16, "push",       IMM8,   0,      OP_STACK},
+    {0x6B, 8, 16, "imul",       REG,    RM,     OP_ARG2_IMM8},
+    {0x6C, 8,  8, "ins",        ESDI,   DXS,    OP_STRING|OP_REP},
+    {0x6D, 8, 16, "ins",        ESDI,   DXS,    OP_STRING|OP_REP},
+    {0x6E, 8,  8, "outs",       DXS,    DSSI,   OP_STRING|OP_REP},
+    {0x6F, 8, 16, "outs",       DXS,    DSSI,   OP_STRING|OP_REP},
+    {0x70, 8,  0, "jo",         REL8,   0,      OP_BRANCH},
+    {0x71, 8,  0, "jno",        REL8,   0,      OP_BRANCH},
+    {0x72, 8,  0, "jb",         REL8,   0,      OP_BRANCH},
+    {0x73, 8,  0, "jae",        REL8,   0,      OP_BRANCH},
+    {0x74, 8,  0, "jz",         REL8,   0,      OP_BRANCH},
+    {0x75, 8,  0, "jnz",        REL8,   0,      OP_BRANCH},
+    {0x76, 8,  0, "jbe",        REL8,   0,      OP_BRANCH},
+    {0x77, 8,  0, "ja",         REL8,   0,      OP_BRANCH},
+    {0x78, 8,  0, "js",         REL8,   0,      OP_BRANCH},
+    {0x79, 8,  0, "jns",        REL8,   0,      OP_BRANCH},
+    {0x7A, 8,  0, "jp",         REL8,   0,      OP_BRANCH},
+    {0x7B, 8,  0, "jnp",        REL8,   0,      OP_BRANCH},
+    {0x7C, 8,  0, "jl",         REL8,   0,      OP_BRANCH},
+    {0x7D, 8,  0, "jge",        REL8,   0,      OP_BRANCH},
+    {0x7E, 8,  0, "jle",        REL8,   0,      OP_BRANCH},
+    {0x7F, 8,  0, "jg",         REL8,   0,      OP_BRANCH},
+    {0x80, 8},  /* arithmetic operations */
+    {0x81, 8},
+    {0x82, 8},  /* undefined (was alias for 80) */
+    {0x83, 8},
+    {0x84, 8,  8, "test",       RM,     REG},
+    {0x85, 8, 16, "test",       RM,     REG},
+    {0x86, 8,  8, "xchg",       REG,    RM,     OP_LOCK},
+    {0x87, 8, 16, "xchg",       REG,    RM,     OP_LOCK},
+    {0x88, 8,  8, "mov",        RM,     REG},
+    {0x89, 8, 16, "mov",        RM,     REG},
+    {0x8A, 8,  8, "mov",        REG,    RM},
+    {0x8B, 8, 16, "mov",        REG,    RM},
+    {0x8C, 8,  0, "mov",        RM,     SEG16},
+    {0x8D, 8, 16, "lea",        REG,    MEM},
+    {0x8E, 8,  0, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
+    {0x8F, 8},  /* pop (subcode 0 only) */
+    {0x90, 8,  0, "nop"},
+    {0x91, 8, 16, "xchg",       AX,     CX},
+    {0x92, 8, 16, "xchg",       AX,     DX},
+    {0x93, 8, 16, "xchg",       AX,     BX},
+    {0x94, 8, 16, "xchg",       AX,     SP},
+    {0x95, 8, 16, "xchg",       AX,     BP},
+    {0x96, 8, 16, "xchg",       AX,     SI},
+    {0x97, 8, 16, "xchg",       AX,     DI},
+    {0x98, 8, 16, "cbw"},       /* handled separately */
+    {0x99, 8, 16, "cwd"},       /* handled separately */
+    {0x9A, 8,  0, "call",       PTR32,  0,      OP_FAR},
+    {0x9B, 8,  0, "wait"},  /* wait ~prefix~ */
+    {0x9C, 8, 16, "pushf",      0,      0,      OP_STACK},
+    {0x9D, 8, 16, "popf",       0,      0,      OP_STACK},
+    {0x9E, 8,  0, "sahf"},
+    {0x9F, 8,  0, "lahf"},
+    {0xA0, 8,  8, "mov",        AL,     MOFFS16},
+    {0xA1, 8, 16, "mov",        AX,     MOFFS16},
+    {0xA2, 8,  8, "mov",        MOFFS16,AL},
+    {0xA3, 8, 16, "mov",        MOFFS16,AX},
+    {0xA4, 8,  8, "movs",       DSSI,   ESDI,   OP_STRING|OP_REP},
+    {0xA5, 8, 16, "movs",       DSSI,   ESDI,   OP_STRING|OP_REP},
+    {0xA6, 8,  8, "cmps",       DSSI,   ESDI,   OP_STRING|OP_REPNE|OP_REPE},
+    {0xA7, 8, 16, "cmps",       DSSI,   ESDI,   OP_STRING|OP_REPNE|OP_REPE},
+    {0xA8, 8,  8, "test",       AL,     IMM},
+    {0xA9, 8, 16, "test",       AX,     IMM},
+    {0xAA, 8,  8, "stos",       ESDI,   ALS,    OP_STRING|OP_REP},
+    {0xAB, 8, 16, "stos",       ESDI,   AXS,    OP_STRING|OP_REP},
+    {0xAC, 8,  8, "lods",       ALS,    DSSI,   OP_STRING|OP_REP},
+    {0xAD, 8, 16, "lods",       AXS,    DSSI,   OP_STRING|OP_REP},
+    {0xAE, 8,  8, "scas",       ALS,    ESDI,   OP_STRING|OP_REPNE|OP_REPE},
+    {0xAF, 8, 16, "scas",       AXS,    ESDI,   OP_STRING|OP_REPNE|OP_REPE},
+    {0xB0, 8,  8, "mov",        AL,     IMM},
+    {0xB1, 8,  8, "mov",        CL,     IMM},
+    {0xB2, 8,  8, "mov",        DL,     IMM},
+    {0xB3, 8,  8, "mov",        BL,     IMM},
+    {0xB4, 8,  8, "mov",        AH,     IMM},
+    {0xB5, 8,  8, "mov",        CH,     IMM},
+    {0xB6, 8,  8, "mov",        DH,     IMM},
+    {0xB7, 8,  8, "mov",        BH,     IMM},
+    {0xB8, 8, 16, "mov",        AX,     IMM},
+    {0xB9, 8, 16, "mov",        CX,     IMM},
+    {0xBA, 8, 16, "mov",        DX,     IMM},
+    {0xBB, 8, 16, "mov",        BX,     IMM},
+    {0xBC, 8, 16, "mov",        SP,     IMM},
+    {0xBD, 8, 16, "mov",        BP,     IMM},
+    {0xBE, 8, 16, "mov",        SI,     IMM},
+    {0xBF, 8, 16, "mov",        DI,     IMM},
+    {0xC0, 8},  /* rotate/shift */
+    {0xC1, 8},  /* rotate/shift */
+    {0xC2, 8,  0, "ret",        IMM16,  0,      OP_STOP},
+    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP|OP_REP},
+    {0xC4, 8},  /* undefined (was les) */
+    {0xC5, 8},  /* undefined (was lds) */
+    {0xC6, 0},  /* mov (subcode 0 only) */
+    {0xC7, 0},  /* mov (subcode 0 only) */
+    {0xC8, 8,  0, "enter",      IMM16,  IMM8},
+    {0xC9, 8,  0, "leave"},
+    {0xCA, 8, 16, "ret",        IMM16,  0,      OP_STOP|OP_FAR},    /* a change in bitness should only happen across segment boundaries */
+    {0xCB, 8, 16, "ret",        0,      0,      OP_STOP|OP_FAR},
+    {0xCC, 8,  0, "int3"},
+    {0xCD, 8,  0, "int",        IMM8},
+    {0xCE, 8,  0, "into"},
+    {0xCF, 8,  0, "iret",       0,      0,      OP_STOP},
+    {0xD0, 8},  /* rotate/shift */
+    {0xD1, 8},  /* rotate/shift */
+    {0xD2, 8},  /* rotate/shift */
+    {0xD3, 8},  /* rotate/shift */
+    {0xD4, 8},  /* undefined (was aam) */
+    {0xD5, 8},  /* undefined (was aad) */
+    {0xD6, 8},  /* undefined (was salc?) */
+    {0xD7, 8,  0, "xlatb",      DSBX},
+    {0xD8, 8},  /* float ops */
+    {0xD9, 8},  /* float ops */
+    {0xDA, 8},  /* float ops */
+    {0xDB, 8},  /* float ops */
+    {0xDC, 8},  /* float ops */
+    {0xDD, 8},  /* float ops */
+    {0xDE, 8},  /* float ops */
+    {0xDF, 8},  /* float ops */
+    {0xE0, 8,  0, "loopnz",     REL8,   0,      OP_BRANCH},  /* fixme: how to print this? */
+    {0xE1, 8,  0, "loopz",      REL8,   0,      OP_BRANCH},
+    {0xE2, 8,  0, "loop",       REL8,   0,      OP_BRANCH},
+    {0xE3, 8,  0, "jcxz",       REL8,   0,      OP_BRANCH},  /* name handled separately */
+    {0xE4, 8,  8, "in",         AL,     IMM},
+    {0xE5, 8, 16, "in",         AX,     IMM},
+    {0xE6, 8,  8, "out",        IMM,    AL},
+    {0xE7, 8, 16, "out",        IMM,    AX},
+    {0xE8, 8,  0, "call",       REL16,  0,      OP_BRANCH},
+    {0xE9, 8,  0, "jmp",        REL16,  0,      OP_BRANCH|OP_STOP},
+    {0xEA, 8},  /* undefined (was jmp/PTR32) */
+    {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
+    {0xEC, 8,  0, "in",         AL,     DX},
+    {0xED, 8,  0, "in",         AX,     DX},
+    {0xEE, 8,  0, "out",        DX,     AL},
+    {0xEF, 8,  0, "out",        DX,     AX},
+    {0xF0, 8,  0, "lock"},      /* lock prefix */
+    {0xF1, 8},  /* undefined (fixme: int1/icebp?) */
+    {0xF2, 8,  0, "repne"},     /* repne prefix */
+    {0xF3, 8,  0, "repe"},      /* repe prefix */
+    {0xF4, 8,  0, "hlt"},
+    {0xF5, 8,  0, "cmc"},
+    {0xF6, 8},  /* group #3 */
+    {0xF7, 8},  /* group #3 */
+    {0xF8, 8,  0, "clc"},
+    {0xF9, 8,  0, "stc"},
+    {0xFA, 8,  0, "cli"},
+    {0xFB, 8,  0, "sti"},
+    {0xFC, 8,  0, "cld"},
+    {0xFD, 8,  0, "std"},
+    {0xFE, 8},  /* inc/dec */
+    {0xFF, 8},  /* group #5 */
+};
+
 static const struct op instructions_group[] = {
     {0x80, 0,  8, "add",        RM,     IMM,    OP_LOCK},
     {0x80, 1,  8, "or",         RM,     IMM,    OP_LOCK},
@@ -1172,7 +1431,12 @@ static const struct op instructions_sse_single_op32[] = {
 };
 
 /* returns the flag if it's a prefix, 0 otherwise */
-static word get_prefix(word opcode) {
+static word get_prefix(word opcode, int bits) {
+    if (bits == 64) {
+        if ((opcode & 0xF0) == 0x40)
+            return PREFIX_REX | ((opcode & 0xF) * 0x1000);
+    }
+
     switch(opcode) {
     case 0x26: return PREFIX_ES;
     case 0x2E: return PREFIX_CS;
@@ -1321,7 +1585,7 @@ static int get_0f_instr(const byte *p, struct instr *instr) {
  * Does not process specific arguments (e.g. registers, DSBX, ONE...)
  * The parameter out is given as a dword but may require additional casting.
  */
-static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr, int is32) {
+static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr, int bits) {
     arg->value = 0;
 
     switch (arg->type) {
@@ -1349,12 +1613,12 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
     case REL16:
         arg->ip = ip;
         /* Equivalently signed or unsigned (i.e. clipped) */
-        if (is32) {
-            arg->value = (ip+4+*((dword *) p)) & 0xffffffff;
-            return 4;
-        } else {
+        if (bits == 16) {
             arg->value = (ip+2+*((word *) p)) & 0xffff;
             return 2;
+        } else {
+            arg->value = (ip+4+*((dword *) p)) & 0xffffffff;
+            return 4;
         }
     case PTR32:
         arg->ip = ip;
@@ -1362,7 +1626,10 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         return 4;
     case MOFFS16:
         arg->ip = ip;
-        if (is32) {
+        if (bits == 64) {
+            arg->value = *((qword *) p);
+            return 8;
+        } else if (bits == 32) {
             arg->value = *((dword *) p);
             return 4;
         } else {
@@ -1474,12 +1741,14 @@ static void get_reg8(char *out, byte reg) {
     strcat(out, reg8[reg]);
 }
 
-static void get_reg16(char *out, byte reg, word is32) {
+static void get_reg16(char *out, byte reg, int size) {
     if (reg <= 7) {
         if (asm_syntax == GAS)
             strcat(out, "%");
-        if (is32)
+        if (size == 32)
             strcat(out, "e");
+        else if (size == 64)
+            strcat(out, "r");
         strcat(out, reg16[reg]);
     }
 }
@@ -1532,7 +1801,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
     if (arg->type >= AL && arg->type <= BH)
         get_reg8(out, arg->type-AL);
     else if (arg->type >= AX && arg->type <= DI)
-        get_reg16(out, arg->type-AX, (instr->op.size == 32));
+        get_reg16(out, arg->type-AX, instr->op.size);
     else if (arg->type >= ES && arg->type <= GS)
         get_seg16(out, arg->type-ES);
 
@@ -1655,10 +1924,10 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) /* mov*b* */
                 get_reg8(out, instr->modrm_reg);
             else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF) /* mov*w* */
-                get_reg16(out, instr->modrm_reg, 0);
+                get_reg16(out, instr->modrm_reg, 16);   /* fixme: 64-bit? */
             else
                 /* note: return a 16-bit register if the size is 0 */
-                get_reg16(out, instr->modrm_reg, (instr->op.size == 32));
+                get_reg16(out, instr->modrm_reg, instr->op.size);
             break;
         }
 
@@ -1711,10 +1980,10 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             if (instr->addrsize == 16) {
                 strcat(out, modrm16_gas[instr->modrm_reg]);
             } else {
-                get_reg16(out, instr->modrm_reg, 1);
+                get_reg16(out, instr->modrm_reg, instr->addrsize);
                 if (instr->sib_index) {
                     strcat(out, ",");
-                    get_reg16(out, instr->sib_index, 1);
+                    get_reg16(out, instr->sib_index, instr->addrsize);
                     strcat(out, ",0");
                     out[strlen(out)-1] = '0'+instr->sib_scale;
                 }
@@ -1760,13 +2029,13 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                 if (instr->addrsize == 16)
                     strcat(out, modrm16_masm[instr->modrm_reg]);
                 else
-                    get_reg16(out, instr->modrm_reg, 1);
+                    get_reg16(out, instr->modrm_reg, instr->addrsize);
                 if (has_sib)
                     strcat(out, "+");
             }
 
             if (has_sib) {
-                get_reg16(out, instr->sib_index, 1);
+                get_reg16(out, instr->sib_index, instr->addrsize);
                 strcat(out, "*0");
                 out[strlen(out)-1] = '0'+instr->sib_scale;
             }
@@ -1803,10 +2072,10 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             get_reg8(out, value);
         else
             /* note: return a 16-bit register if the size is 0 */
-            get_reg16(out, value, (instr->op.size == 32));
+            get_reg16(out, value, instr->op.size);
         break;
     case REG32:
-        get_reg16(out, value, 1);
+        get_reg16(out, value, 32);
         break;
     case SEG16:
         if (value > 5)
@@ -1881,15 +2150,14 @@ static void print_arg(char *ip, struct instr *instr, int i) {
  * ensure they only get printed once), so we will need to watch out for
  * multiple prefixes, invalid instructions, etc.
  */
-int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
+int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
     int len = 0;
     byte opcode;
     word prefix;
 
     memset(instr, 0, sizeof(*instr));
 
-    /* first iterate through prefixes until we find a real opcode */
-    while ((prefix = get_prefix(p[len]))) {
+    while ((prefix = get_prefix(p[len], bits))) {
         if ((instr->prefix & PREFIX_SEG_MASK) && (prefix & PREFIX_SEG_MASK)) {
             instr->op = instructions[p[len]];
             instr->prefix &= ~PREFIX_SEG_MASK;
@@ -1905,7 +2173,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
     opcode = p[len];
 
     /* copy the op_info */
-    if (opcode == 0xC4 && MODOF(p[len+1]) == 3 && is32) {
+    if (opcode == 0xC4 && MODOF(p[len+1]) == 3 && bits != 16) {
         byte subcode = 0xcc;
         len++;
         instr->vex = 1;
@@ -1919,7 +2187,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
         else if ((p[len] & 3) == 2) instr->prefix |= PREFIX_REPE;
         else if ((p[len] & 3) == 1) instr->prefix |= PREFIX_OP32;
         len += get_sse_single(subcode, p[len+1], instr);
-    } else if (opcode == 0xC5 && MODOF(p[len+1]) == 3 && is32) {
+    } else if (opcode == 0xC5 && MODOF(p[len+1]) == 3 && bits != 16) {
         len++;
         instr->vex = 1;
         instr->vex_reg = ~((p[len] >> 3) & 7);
@@ -1929,7 +2197,9 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
         else if ((p[len] & 3) == 1) instr->prefix |= PREFIX_OP32;
         len++;
         len += get_0f_instr(p+len, instr);
-    } else if (instructions[opcode].name[0]) {
+    } else if (bits == 64 && instructions64[opcode].name[0]) {
+        instr->op = instructions64[opcode];
+    } else if (bits != 64 && instructions[opcode].name[0]) {
         instr->op = instructions[opcode];
     } else {
         byte subcode = REGOF(p[len+1]);
@@ -1968,14 +2238,16 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
 
     /* resolve the size */
     if (instr->prefix & PREFIX_OP32)
-        instr->op.size = is32 ? 16 : 32;
+        instr->op.size = (bits == 16) ? 32 : 16;
+    else if (instr->prefix & PREFIX_REXW)
+        instr->op.size = 64;
     else if (instr->op.size == 16)
-        instr->op.size = is32 ? 32 : 16;
+        instr->op.size = (bits == 16) ? 16 : 32;
 
     if (instr->prefix & PREFIX_ADDR32)
-        instr->addrsize = is32 ? 16 : 32;
+        instr->addrsize = (bits == 32) ? 16 : 32;
     else
-        instr->addrsize = is32 ? 32 : 16;
+        instr->addrsize = bits;
 
     /* figure out what arguments we have */
     if (instr->op.arg0) {
@@ -1990,13 +2262,13 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
          * value is supposed to be relocated. */
         instr->args[0].ip = instr->args[1].ip = instr->args[2].ip = ip;
 
-        len += get_arg(ip+len, &p[len], &instr->args[0], instr, is32);
+        len += get_arg(ip+len, &p[len], &instr->args[0], instr, bits);
 
         /* registers that read from the modrm byte, which we might have just processed */
         if (instr->op.arg1 >= REG && instr->op.arg1 <= TR32)
-            get_arg(ip+len, &p[base], &instr->args[1], instr, is32);
+            get_arg(ip+len, &p[base], &instr->args[1], instr, bits);
         else
-            len += get_arg(ip+len, &p[len], &instr->args[1], instr, is32);
+            len += get_arg(ip+len, &p[len], &instr->args[1], instr, bits);
 
         /* arg2 */
         if (instr->op.flags & OP_ARG2_IMM)
@@ -2006,7 +2278,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
         else if (instr->op.flags & OP_ARG2_CL)
             instr->args[2].type = CL;
 
-        len += get_arg(ip+len, &p[len], &instr->args[2], instr, is32);
+        len += get_arg(ip+len, &p[len], &instr->args[2], instr, bits);
     }
 
     /* modify the instruction name if appropriate */
@@ -2070,8 +2342,10 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int is32) {
     return len;
 }
 
-void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment) {
+void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment, int bits) {
     int i;
+
+    /* FIXME: now that we've had to add bits to this function, get rid of ip_string */
 
     /* get the arguments */
 
@@ -2080,8 +2354,8 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
     print_arg(ip, instr, 2);
 
     /* did we find too many prefixes? */
-    if (get_prefix(instr->op.opcode)) {
-        if (get_prefix(instr->op.opcode) & PREFIX_SEG_MASK)
+    if (get_prefix(instr->op.opcode, bits)) {
+        if (get_prefix(instr->op.opcode, bits) & PREFIX_SEG_MASK)
             warn_at("Multiple segment prefixes found: %s, %s. Skipping to next instruction.\n",
                     seg16[(instr->prefix & PREFIX_SEG_MASK)-1], instr->op.name);
         else

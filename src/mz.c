@@ -54,11 +54,11 @@ static int print_mz_instr(dword ip, byte *p, char *out, const byte *flags) {
 
     out[0] = 0;
 
-    len = get_instr(ip, p, &instr, 0);
+    len = get_instr(ip, p, &instr, 16);
 
     sprintf(ip_string, "%05x", ip);
 
-    print_instr(out, ip_string, p, len, flags[ip], &instr, NULL);
+    print_instr(out, ip_string, p, len, flags[ip], &instr, NULL, 16);
 
     return len;
 }
@@ -131,7 +131,7 @@ static void scan_segment(dword ip, struct mz *mz) {
         fseek(f, mz->start+ip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));  // fixme
         fread(buffer, 1, min(sizeof(buffer), mz->length-ip), f);
-        instr_length = get_instr(ip, buffer, &instr, 0);
+        instr_length = get_instr(ip, buffer, &instr, 16);
 
         /* mark the bytes */
         mz->flags[ip] |= INSTR_VALID;

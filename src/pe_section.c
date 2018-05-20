@@ -114,11 +114,12 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     char *comment = NULL;
     char ip_string[9];
     qword absip = ip;
+    int bits = (pe->magic == 0x10b) ? 32 : 64;
 
     if (!pe_rel_addr)
         absip += pe->imagebase;
 
-    len = get_instr(ip, p, &instr, 1);
+    len = get_instr(ip, p, &instr, bits);
 
     sprintf(ip_string, "%8lx", absip);
 
@@ -157,7 +158,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
             comment = relocate_arg(&instr, &instr.args[1], pe);
     }
 
-    print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment);
+    print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment, bits);
 
     return len;
 }
@@ -283,7 +284,7 @@ static void scan_segment(dword ip, struct pe *pe) {
         fseek(f, sec->offset + relip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));
         fread(buffer, 1, min(sizeof(buffer), sec->length-relip), f);
-        instr_length = get_instr(ip, buffer, &instr, 1);
+        instr_length = get_instr(ip, buffer, &instr, (pe->magic == 0x10b) ? 32 : 64);
 
         /* mark the bytes */
         sec->instr_flags[relip] |= INSTR_VALID;

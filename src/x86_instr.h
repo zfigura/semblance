@@ -97,6 +97,12 @@ struct op {
 #define PREFIX_REPE     0x0080  /* F3 */
 #define PREFIX_WAIT     0x0100  /* 9B */
 
+#define PREFIX_REX      0x0800  /* 40 */
+#define PREFIX_REXB     0x1000  /* 41 */
+#define PREFIX_REXX     0x2000  /* 42 */
+#define PREFIX_REXR     0x4000  /* 44 */
+#define PREFIX_REXW     0x8000  /* 48 */
+
 enum disptype {
     DISP_NONE = 0,      /* no disp, i.e. mod == 0 && m != 6 */
     DISP_8    = 1,      /* one byte */
@@ -129,8 +135,8 @@ struct instr {
     int vex_256:1;
 };
 
-extern int get_instr(dword ip, const byte *p, struct instr *instr, int is32);
-extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment);
+extern int get_instr(dword ip, const byte *p, struct instr *instr, int bits);
+extern void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment, int bits);
 
 /* 66 + 67 + seg + lock/rep + 2 bytes opcode + modrm + sib + 4 bytes displacement + 4 bytes immediate */
 #define MAX_INSTR       16

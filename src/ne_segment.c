@@ -76,7 +76,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
 
     if (!r && arg->type == PTR32) r = get_reloc(seg, arg->ip+2);
     if (!r) {
-        warn("%#lx: Byte tagged INSTR_RELOC has no reloc attached; this is a bug.\n", arg->ip);
+        warn("%#x: Byte tagged INSTR_RELOC has no reloc attached; this is a bug.\n", arg->ip);
         return "?";
     }
 
@@ -117,7 +117,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
         }
     }
 
-    warn("%#lx: unhandled relocation: size %d, type %d, argtype %x\n",
+    warn("%#x: unhandled relocation: size %d, type %d, argtype %x\n",
         arg->ip, r->size, r->type, arg->type);
 
     return NULL;
@@ -128,13 +128,14 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
     word cs = seg->cs;
     struct instr instr = {0};
     unsigned len;
+    int bits = (seg->flags & 0x2000) ? 32 : 16;
 
     const char *comment = NULL;
     char ip_string[10];
 
     out[0] = 0;
 
-    len = get_instr(ip, p, &instr, seg->flags & 0x2000);
+    len = get_instr(ip, p, &instr, bits);
 
     sprintf(ip_string, "%3d:%04x", seg->cs, ip);
 
@@ -151,7 +152,7 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
     if (!comment && instr.op.arg0 == REL16)
         comment = get_entry_name(cs, instr.args[0].value, ne);
 
-    print_instr(out, ip_string, p, len, seg->instr_flags[ip], &instr, comment);
+    print_instr(out, ip_string, p, len, seg->instr_flags[ip], &instr, comment, bits);
 
     return len;
 };
@@ -257,7 +258,7 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
         fseek(f, seg->start+ip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));
         fread(buffer, 1, min(sizeof(buffer), seg->length-ip), f);
-        instr_length = get_instr(ip, buffer, &instr, seg->flags & 0x2000);
+        instr_length = get_instr(ip, buffer, &instr, (seg->flags & 0x2000) ? 32 : 16);
 
         /* mark the bytes */
         seg->instr_flags[ip] |= INSTR_VALID;
