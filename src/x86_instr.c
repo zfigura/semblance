@@ -392,9 +392,9 @@ static const struct op instructions64[256] = {
     {0x65, 8,  0, "gs"},  /* GS prefix */
     {0x66, 8,  0, "data"},  /* op-size prefix */
     {0x67, 8,  0, "addr"},  /* addr-size prefix */
-    {0x68, 8, 16, "push",       IMM,    0,      OP_STACK},
+    {0x68, 8, 64, "push",       IMM,    0,      OP_STACK},
     {0x69, 8, 16, "imul",       REG,    RM,     OP_ARG2_IMM},
-    {0x6A, 8, 16, "push",       IMM8,   0,      OP_STACK},
+    {0x6A, 8, 64, "push",       IMM8,   0,      OP_STACK},
     {0x6B, 8, 16, "imul",       REG,    RM,     OP_ARG2_IMM8},
     {0x6C, 8,  8, "ins",        ESDI,   DXS,    OP_STRING|OP_REP},
     {0x6D, 8, 16, "ins",        ESDI,   DXS,    OP_STRING|OP_REP},
@@ -660,7 +660,7 @@ static const struct op instructions_group[] = {
     {0xFF, 3, 16, "call",       MEM,    0,      OP_FAR},        /* a change in bitness should only happen across segment boundaries */
     {0xFF, 4,  0, "jmp",        RM,     0,      OP_STOP},
     {0xFF, 5, 16, "jmp",        MEM,    0,      OP_STOP|OP_FAR},    /* a change in bitness should only happen across segment boundaries */
-    {0xFF, 6, 16, "push",       RM},
+    {0xFF, 6, 64, "push",       RM},
 };
 
 /* a subcode value of 8 means all subcodes,
@@ -1898,20 +1898,16 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                 get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
                 strcat(out, ":");
             }
-            strcat(out, (asm_syntax == GAS) ? "(%" : "[");
-            if (instr->prefix & PREFIX_ADDR32)
-                strcat(out, "e");
-            strcat(out, (arg->type == DSBX) ? "bx" : "si");
+            strcat(out, (asm_syntax == GAS) ? "(" : "[");
+            get_reg16(out, (arg->type == DSBX) ? 3 : 6, instr->addrsize);
             strcat(out, (asm_syntax == GAS) ? ")" : "]");
         }
         instr->usedmem = 1;
         break;
     case ESDI:
         if (asm_syntax != NASM) {
-            strcat(out, (asm_syntax == GAS) ? "%es:(%" : "es:[");
-            if (instr->prefix & PREFIX_ADDR32)
-                strcat(out, "e");
-            strcat(out, "di");
+            strcat(out, (asm_syntax == GAS) ? "%es:(" : "es:[");
+            get_reg16(out, 7, instr->addrsize);
             strcat(out, (asm_syntax == GAS) ? ")" : "]");
         }
         instr->usedmem = 1;
@@ -2317,6 +2313,8 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
     if ((instr->op.flags & OP_STACK) && (instr->prefix & PREFIX_OP32)) {
         if (instr->op.size == 16)
             strcat(instr->op.name, "w");
+        else if (instr->op.size == 64)
+            strcat(instr->op.name, "q");
         else
             strcat(instr->op.name, (asm_syntax == GAS) ? "l" : "d");
     } else if ((instr->op.flags & OP_STRING) && asm_syntax != GAS) {
@@ -2367,6 +2365,8 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
                 strcat(instr->op.name, "w");
             else if (instr->op.size == 32)
                 strcat(instr->op.name, "l");
+            else if (instr->op.size == 64)
+                strcat(instr->op.name, "q");
         }
     } else if (asm_syntax != GAS && (instr->op.opcode == 0xCA || instr->op.opcode == 0xCB))
         strcat(instr->op.name, "f");
