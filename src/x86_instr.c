@@ -368,22 +368,22 @@ static const struct op instructions64[256] = {
     {0x4D, 8, 16, "rex.WRB"},
     {0x4E, 8, 16, "rex.WRX"},
     {0x4F, 8, 16, "rex.WRXB"},
-    {0x50, 8, 16, "push",       AX},
-    {0x51, 8, 16, "push",       CX},
-    {0x52, 8, 16, "push",       DX},
-    {0x53, 8, 16, "push",       BX},
-    {0x54, 8, 16, "push",       SP},
-    {0x55, 8, 16, "push",       BP},
-    {0x56, 8, 16, "push",       SI},
-    {0x57, 8, 16, "push",       DI},
-    {0x58, 8, 16, "pop",        AX},
-    {0x59, 8, 16, "pop",        CX},
-    {0x5A, 8, 16, "pop",        DX},
-    {0x5B, 8, 16, "pop",        BX},
-    {0x5C, 8, 16, "pop",        SP},
-    {0x5D, 8, 16, "pop",        BP},
-    {0x5E, 8, 16, "pop",        SI},
-    {0x5F, 8, 16, "pop",        DI},
+    {0x50, 8, 64, "push",       AX},
+    {0x51, 8, 64, "push",       CX},
+    {0x52, 8, 64, "push",       DX},
+    {0x53, 8, 64, "push",       BX},
+    {0x54, 8, 64, "push",       SP},
+    {0x55, 8, 64, "push",       BP},
+    {0x56, 8, 64, "push",       SI},
+    {0x57, 8, 64, "push",       DI},
+    {0x58, 8, 64, "pop",        AX},
+    {0x59, 8, 64, "pop",        CX},
+    {0x5A, 8, 64, "pop",        DX},
+    {0x5B, 8, 64, "pop",        BX},
+    {0x5C, 8, 64, "pop",        SP},
+    {0x5D, 8, 64, "pop",        BP},
+    {0x5E, 8, 64, "pop",        SI},
+    {0x5F, 8, 64, "pop",        DI},
     {0x60, 8},  /* undefined (was pusha) */
     {0x61, 8},  /* undefined (was popa) */
     {0x62, 8},  /* undefined (was bound) */
@@ -1651,6 +1651,7 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         if (mod == 3) {
             instr->modrm_disp = DISP_REG;
             instr->modrm_reg = rm;
+            if (instr->prefix & PREFIX_REXB) instr->modrm_reg += 8;
             return 1;
         }
 
@@ -1661,7 +1662,8 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             p++;
             instr->sib_scale = 1 << MODOF(*p);
             instr->sib_index = REGOF(*p);
-            if (instr->sib_index == 4) instr->sib_index = 8;
+            if (instr->prefix & PREFIX_REXX) instr->sib_index += 8;
+            if (instr->sib_index == 4) instr->sib_index = -1;
             rm = MEMOF(*p);
             ret++;
         }
@@ -1686,10 +1688,12 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         } else if (mod == 0) {
             instr->modrm_disp = DISP_NONE;
             instr->modrm_reg = rm;
+            if (instr->prefix & PREFIX_REXB) instr->modrm_reg += 8;
         } else if (mod == 1) {
             arg->value = *(p+1);
             instr->modrm_disp = DISP_8;
             instr->modrm_reg = rm;
+            if (instr->prefix & PREFIX_REXB) instr->modrm_reg += 8;
             ret += 1;
         } else if (mod == 2) {
             if (instr->addrsize == 32) {
@@ -1701,16 +1705,21 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             }
             instr->modrm_disp = DISP_16;
             instr->modrm_reg = rm;
+            if (instr->prefix & PREFIX_REXB) instr->modrm_reg += 8;
         }
         return ret;
     }
     case REG:
-    case SEG16:
+    case XMM:
     case CR32:
     case DR32:
-    case TR32:
+        arg->value = REGOF(*p);
+        if (instr->prefix & PREFIX_REXR)
+            arg->value += 8;
+        return 0;
     case MMX:
-    case XMM:
+    case SEG16:
+    case TR32:  /* FIXME: should this go with the above? */
         arg->value = REGOF(*p);
         return 0;
     case REG32:
@@ -1734,8 +1743,20 @@ static const char reg8[8][3] = {
     "al","cl","dl","bl","ah","ch","dh","bh"
 };
 
-static const char reg16[17][3] = {
-    "ax","cx","dx","bx","sp","bp","si","di","8","9","10","11","12","13","14","15","ip"
+static const char reg8_rex[16][5] = {
+    "al","cl","dl","bl","spl","bpl","sil","dil","r8b","r9b","r10b","r11b","r12b","r13b","r14b","r15b"
+};
+
+static const char reg16[16][5] = {
+    "ax","cx","dx","bx","sp","bp","si","di","r8w","r9w","r10w","r11w","r12w","r13w","r14w","r15w"
+};
+
+static const char reg32[17][5] = {
+    "eax","ecx","edx","ebx","esp","ebp","esi","edi","r8d","r9d","r10d","r11d","r12d","r13d","r14d","r15d","eip"
+};
+
+static const char reg64[17][4] = {
+    "rax","rcx","rdx","rbx","rsp","rbp","rsi","rdi","r8","r9","r10","r11","r12","r13","r14","r15","rip"
 };
 
 static void get_seg16(char *out, byte reg) {
@@ -1744,21 +1765,22 @@ static void get_seg16(char *out, byte reg) {
     strcat(out, seg16[reg]);
 }
 
-static void get_reg8(char *out, byte reg) {
+static void get_reg8(char *out, byte reg, int rex) {
     if (asm_syntax == GAS)
         strcat(out, "%");
-    strcat(out, reg8[reg]);
+    strcat(out, rex ? reg8_rex[reg] : reg8[reg]);
 }
 
 static void get_reg16(char *out, byte reg, int size) {
     if (reg != -1) {
         if (asm_syntax == GAS)
             strcat(out, "%");
+        if (size == 16)
+            strcat(out, reg16[reg]);
         if (size == 32)
-            strcat(out, "e");
+            strcat(out, reg32[reg]);
         else if (size == 64)
-            strcat(out, "r");
-        strcat(out, reg16[reg]);
+            strcat(out, reg64[reg]);
     }
 }
 
@@ -1808,9 +1830,9 @@ static void print_arg(char *ip, struct instr *instr, int i) {
     if (arg->string[0]) return; /* someone wants to print something special */
 
     if (arg->type >= AL && arg->type <= BH)
-        get_reg8(out, arg->type-AL);
+        get_reg8(out, arg->type-AL, 0);
     else if (arg->type >= AX && arg->type <= DI)
-        get_reg16(out, arg->type-AX, instr->op.size);
+        get_reg16(out, arg->type-AX + ((instr->prefix & PREFIX_REXB) ? 8 : 0), instr->op.size);
     else if (arg->type >= ES && arg->type <= GS)
         get_seg16(out, arg->type-ES);
 
@@ -1930,9 +1952,9 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             if (arg->type == MEM)
                 warn_at("ModRM byte has mod 3, but opcode only allows accessing memory.\n");
 
-            if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) /* mov*b* */
-                get_reg8(out, instr->modrm_reg);
-            else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF) /* mov*w* */
+            if (instr->op.size == 8 || instr->op.opcode == 0x0FB6 || instr->op.opcode == 0x0FBE) { /* mov*b* */
+                get_reg8(out, instr->modrm_reg, instr->prefix & PREFIX_REX);
+            } else if (instr->op.opcode == 0x0FB7 || instr->op.opcode == 0x0FBF) /* mov*w* */
                 get_reg16(out, instr->modrm_reg, 16);   /* fixme: 64-bit? */
             else
                 /* note: return a 16-bit register if the size is 0 */
@@ -1990,7 +2012,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                 strcat(out, modrm16_gas[instr->modrm_reg]);
             } else {
                 get_reg16(out, instr->modrm_reg, instr->addrsize);
-                if (instr->sib_index) {
+                if (instr->sib_scale) {
                     strcat(out, ",");
                     get_reg16(out, instr->sib_index, instr->addrsize);
                     strcat(out, ",0");
@@ -1999,7 +2021,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             }
             strcat(out, ")");
         } else {
-            int has_sib = (instr->sib_scale != 0 && instr->sib_index < 8);
+            int has_sib = (instr->sib_scale != 0 && instr->sib_index != -1);
             if (instr->op.flags & OP_FAR)
                 strcat(out, "far ");
             else if (!is_reg(instr->op.arg0) && !is_reg(instr->op.arg1)) {
@@ -2078,7 +2100,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
     case REG:
     case REGONLY:
         if (instr->op.size == 8)
-            get_reg8(out, value);
+            get_reg8(out, value, instr->prefix & PREFIX_REX);
         else
             /* note: return a 16-bit register if the size is 0 */
             get_reg16(out, value, instr->op.size);
