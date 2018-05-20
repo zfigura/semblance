@@ -1825,7 +1825,7 @@ static int is_reg(enum argtype arg) {
 static void print_arg(char *ip, struct instr *instr, int i) {
     struct arg *arg = &instr->args[i];
     char *out = arg->string;
-    dword value = arg->value;
+    qword value = arg->value;
 
     if (arg->string[0]) return; /* someone wants to print something special */
 
@@ -1847,29 +1847,29 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             else
                 sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "word %04Xh", (word) (int8_t) value);
         } else
-            sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
+            sprintf(out, (asm_syntax == GAS) ? "$0x%02lx" : "%02lXh", value);
         break;
     case IMM16:
-        sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
+        sprintf(out, (asm_syntax == GAS) ? "$0x%04lx" : "%04lXh", value);
         break;
     case IMM:
         if (instr->op.flags & OP_STACK) {
             if (instr->op.size == 32)
-                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "dword %08Xh", value);
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08lx" : "dword %08lXh", value);
             else
-                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "word %04Xh", value);
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04lx" : "word %04lXh", value);
         } else {
             if (instr->op.size == 8)
-                sprintf(out, (asm_syntax == GAS) ? "$0x%02x" : "%02Xh", value);
+                sprintf(out, (asm_syntax == GAS) ? "$0x%02lx" : "%02lXh", value);
             else if (instr->op.size == 16)
-                sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "%04Xh", value);
+                sprintf(out, (asm_syntax == GAS) ? "$0x%04lx" : "%04lXh", value);
             else
-                sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "%08Xh", value);
+                sprintf(out, (asm_syntax == GAS) ? "$0x%08lx" : "%08lXh", value);
         }
         break;
     case REL8:
     case REL16:
-        sprintf(out, "%04x", value);
+        sprintf(out, "%04lx", value);
         break;
     case PTR32:
         /* should always be relocated */
@@ -1880,14 +1880,14 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                 get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
                 strcat(out, ":");
             }
-            sprintf(out+strlen(out), "0x%04x", value);
+            sprintf(out+strlen(out), "0x%04lx", value);
         } else {
             out[0] = '[';
             if (instr->prefix & PREFIX_SEG_MASK) {
                 get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);
                 strcat(out, ":");
             }
-            sprintf(out+strlen(out), "%04Xh]", value);
+            sprintf(out+strlen(out), "%04lXh]", value);
         }
         instr->usedmem = 1;
         break;
@@ -1987,7 +1987,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 16) {
                 int16_t svalue = (int16_t) value;
                 if (instr->modrm_reg == -1) {
-                    sprintf(out+strlen(out), "0x%04x", value);  /* absolute memory is unsigned */
+                    sprintf(out+strlen(out), "0x%04lx", value);  /* absolute memory is unsigned */
                     return;
                 }
                 if (svalue < 0)
@@ -1997,7 +1997,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             } else if (instr->modrm_disp == DISP_16) {
                 int32_t svalue = (int32_t) value;
                 if (instr->modrm_reg == -1) {
-                    sprintf(out+strlen(out), "0x%08x", value);  /* absolute memory is unsigned */
+                    sprintf(out+strlen(out), "0x%08lx", value);  /* absolute memory is unsigned */
                     return;
                 }
                 if (svalue < 0)
@@ -2080,7 +2080,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             } else if (instr->modrm_disp == DISP_16 && instr->addrsize == 16) {
                 int16_t svalue = (int16_t) value;
                 if (instr->modrm_reg == -1 && !has_sib)
-                    sprintf(out+strlen(out), "%04Xh", value);   /* absolute memory is unsigned */
+                    sprintf(out+strlen(out), "%04lXh", value);   /* absolute memory is unsigned */
                 else if (svalue < 0)
                     sprintf(out+strlen(out), "-%04Xh", -svalue);
                 else
@@ -2088,7 +2088,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             } else if (instr->modrm_disp == DISP_16) {
                 int32_t svalue = (int32_t) value;
                 if (instr->modrm_reg == -1 && !has_sib)
-                    sprintf(out+strlen(out), "%08Xh", value);   /* absolute memory is unsigned */
+                    sprintf(out+strlen(out), "%08lXh", value);   /* absolute memory is unsigned */
                 else if (svalue < 0)
                     sprintf(out+strlen(out), "-%08Xh", -svalue);
                 else
@@ -2110,12 +2110,12 @@ static void print_arg(char *ip, struct instr *instr, int i) {
         break;
     case SEG16:
         if (value > 5)
-            warn_at("Invalid segment register %d\n", value);
+            warn_at("Invalid segment register %ld\n", value);
         get_seg16(out, value);
         break;
     case CR32:
         if (value == 1 || value > 4)
-            warn_at("Invalid control register %d\n", value);
+            warn_at("Invalid control register %ld\n", value);
         if (asm_syntax == GAS)
             strcat(out, "%");
         strcat(out, "cr0");
@@ -2129,7 +2129,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
         break;
     case TR32:
         if (value < 3)
-            warn_at("Invalid test register %d\n", value);
+            warn_at("Invalid test register %ld\n", value);
         if (asm_syntax == GAS)
             strcat(out, "%");
         strcat(out, "tr0");
