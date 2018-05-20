@@ -109,7 +109,7 @@ extern const char seg16[6][3];
 struct arg {
     char string[32];
     dword ip;
-    dword value;
+    qword value;
     enum argtype type;
 };
 

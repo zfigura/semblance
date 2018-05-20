@@ -39,7 +39,7 @@ struct section *addr2section(dword addr, const struct pe *pe) {
     /* Even worse than the below, some data is sensitive to which section it's in! */
 
     int i;
-    for (i = 0; i < pe->header.file.NumberOfSections; i++) {
+    for (i = 0; i < pe->header.NumberOfSections; i++) {
          if (addr >= pe->sections[i].address && addr < pe->sections[i].address + pe->sections[i].min_alloc)
             return &pe->sections[i];
     }
@@ -71,7 +71,7 @@ static char *get_export_name(dword ip, const struct pe *pe) {
 static char *get_imported_name(dword offset, const struct pe *pe) {
     unsigned i;
 
-    offset -= pe->header.opt.ImageBase;
+    offset -= pe->imagebase;
 
     for (i = 0; i < pe->import_count; i++) {
         unsigned index = (offset - pe->imports[i].nametab_addr) / sizeof(dword);
@@ -100,7 +100,7 @@ static char *relocate_arg(struct instr *instr, struct arg *arg, const struct pe 
         return NULL;    /* not even a real relocation, just padding */
     else if (r->type == 3) {
         if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == 8) || arg->type == MOFFS16) {
-            snprintf(comment, 10, "%x", arg->value - pe->header.opt.ImageBase);
+            snprintf(comment, 10, "%lx", arg->value - pe->opt32.ImageBase);
             return comment;
         }
     }
@@ -113,14 +113,14 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     unsigned len;
     char *comment = NULL;
     char ip_string[9];
-    dword absip = ip;
+    qword absip = ip;
 
     if (!pe_rel_addr)
-        absip += pe->header.opt.ImageBase;
+        absip += pe->imagebase;
 
     len = get_instr(ip, p, &instr, 1);
 
-    sprintf(ip_string, "%8x", absip);
+    sprintf(ip_string, "%8lx", absip);
 
     /* Check for relocations and imported names. PE separates the two concepts:
      * imported names are done by jumping into a block in .idata which is
@@ -163,7 +163,8 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
 }
 
 static void print_disassembly(const struct section *sec, const struct pe *pe) {
-    dword relip = 0, ip, absip;
+    dword relip = 0, ip;
+    qword absip;
 
     byte buffer[MAX_INSTR];
     char out[256];
@@ -198,12 +199,12 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
 
         absip = ip;
         if (!pe_rel_addr)
-            absip += pe->header.opt.ImageBase;
+            absip += pe->imagebase;
 
         if (sec->instr_flags[relip] & INSTR_FUNC) {
             char *name = get_export_name(ip, pe);
             printf("\n");
-            printf("%x <%s>:\n", absip, name ? name : "no name");
+            printf("%lx <%s>:\n", absip, name ? name : "no name");
         }
 
         relip += print_pe_instr(sec, ip, buffer, out, pe);
@@ -213,7 +214,8 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
 }
 
 static void print_data(const struct section *sec, struct pe *pe) {
-    dword relip = 0, absip;
+    dword relip = 0;
+    qword absip;
 
     /* Page alignment means that (contrary to NE) sections are going to end with
      * a bunch of annoying zeroes. So don't read past the minimum allocation. */
@@ -229,9 +231,9 @@ static void print_data(const struct section *sec, struct pe *pe) {
 
         absip = relip + sec->address;
         if (!pe_rel_addr)
-            absip += pe->header.opt.ImageBase;
+            absip += pe->imagebase;
 
-        printf("%8x", absip);
+        printf("%8lx", absip);
         for (i=0; i<16; i++) {
             if (i < len)
                 printf(" %02x", row[i]);
@@ -307,7 +309,7 @@ static void scan_segment(dword ip, struct pe *pe) {
                 /* scan it */
                 scan_segment(instr.args[0].value, pe);
             } else
-                warn_at("Branch '%s' to byte %x not in image.\n", instr.op.name, instr.args[0].value);
+                warn_at("Branch '%s' to byte %lx not in image.\n", instr.op.name, instr.args[0].value);
         }
 
         for (i = relip; i < relip+instr_length; i++) {
@@ -322,7 +324,9 @@ static void scan_segment(dword ip, struct pe *pe) {
                 case 0: /* padding */
                     break;
                 case 3: /* HIGHLOW */
-                    taddr = read_dword() - pe->header.opt.ImageBase;
+                    if (pe->magic != 0x10b)
+                        warn_at("HIGHLOW relocation in 64-bit image?\n");
+                    taddr = read_dword() - pe->opt32.ImageBase;
                     tsec = addr2section(taddr, pe);
                     /* Only try to scan it if it's an immediate address. If someone is
                      * dereferencing an address inside a code section, it's data. */
@@ -419,9 +423,11 @@ void read_sections(struct pe *pe) {
         }
     }
 
-    if (!(pe->header.file.Characteristics & 0x2000)) {
-        dword entry_point = pe->header.opt.AddressOfEntryPoint;
+    if (!(pe->header.Characteristics & 0x2000)) {
+        dword entry_point = (pe->magic == 0x10b) ? pe->opt32.AddressOfEntryPoint : pe->opt64.AddressOfEntryPoint;
         struct section *sec = addr2section(entry_point, pe);
+        if (!sec)
+            warn("Entry point %#x isn't in a section?\n", entry_point);
         if (sec->flags & 0x20) {
             sec->instr_flags[entry_point - sec->address] |= INSTR_FUNC;
             scan_segment(entry_point, pe);
@@ -433,7 +439,7 @@ void print_sections(struct pe *pe) {
     int i;
     struct section *sec;
 
-    for (i = 0; i < pe->header.file.NumberOfSections; i++) {
+    for (i = 0; i < pe->header.NumberOfSections; i++) {
         sec = &pe->sections[i];
 
         putchar('\n');

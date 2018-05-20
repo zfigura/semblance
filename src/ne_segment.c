@@ -76,7 +76,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
 
     if (!r && arg->type == PTR32) r = get_reloc(seg, arg->ip+2);
     if (!r) {
-        warn("%x: Byte tagged INSTR_RELOC has no reloc attached; this is a bug.\n", arg->ip);
+        warn("%#lx: Byte tagged INSTR_RELOC has no reloc attached; this is a bug.\n", arg->ip);
         return "?";
     }
 
@@ -99,7 +99,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
     } else if (arg->type == PTR32 && r->size == 2 && r->type == 0) {
         /* segment relocation on 32-bit pointer; copy the segment but keep the
          * offset */
-        snprintf(arg->string, sizeof(arg->string), "%d:%04x", r->tseg, arg->value);
+        snprintf(arg->string, sizeof(arg->string), "%d:%04lx", r->tseg, arg->value);
         return get_entry_name(r->tseg, arg->value, ne);
     } else if (arg->type == IMM && (r->size == 2 || r->size == 5)) {
         /* imm16 referencing a segment or offset directly */
@@ -117,7 +117,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
         }
     }
 
-    warn("%x: unhandled relocation: size %d, type %d, argtype %x\n",
+    warn("%#lx: unhandled relocation: size %d, type %d, argtype %x\n",
         arg->ip, r->size, r->type, arg->type);
 
     return NULL;

@@ -90,62 +90,100 @@ static const char *const subsystems[] = {
     0
 };
 
-static void print_header(struct header_pe *header) {
-    putchar('\n');
+static void print_opt32(struct optional_header *opt) {
+    printf("File version: %d.%d\n", opt->MajorImageVersion, opt->MinorImageVersion); /* 44 */
 
-    if (!header->file.SizeOfOptionalHeader) {
-        printf("No optional header\n");
-        return;
-    } else if (header->file.SizeOfOptionalHeader < sizeof(struct optional_header))
-        warn("Size of optional header is %u (expected at least %lu).\n",
-            header->file.SizeOfOptionalHeader, sizeof(struct optional_header));
+    printf("Linker version: %d.%d\n", opt->MajorLinkerVersion, opt->MinorLinkerVersion); /* 1a */
 
-    print_flags(header->file.Characteristics); /* 16 */
-
-    if (header->opt.Magic == 0x10b) /* 18 */
-        printf("Image type: 32-bit\n");
-    else if (header->opt.Magic == 0x20b)
-        printf("Image type: 64-bit\n");
-    else if (header->opt.Magic == 0x107)
-        printf("Image type: ROM\n");
-    else
-        printf("Image type: (unknown value 0x%x)\n", header->opt.Magic);
-
-    printf("File version: %d.%d\n", header->opt.MajorImageVersion, header->opt.MinorImageVersion); /* 44 */
-
-    printf("Linker version: %d.%d\n", header->opt.MajorLinkerVersion, header->opt.MinorLinkerVersion); /* 1a */
-
-    if (header->opt.AddressOfEntryPoint) {
-        dword address = header->opt.AddressOfEntryPoint;
+    if (opt->AddressOfEntryPoint) {
+        dword address = opt->AddressOfEntryPoint;
         if (!pe_rel_addr)
-            address += header->opt.ImageBase;
+            address += opt->ImageBase;
         printf("Program entry point: 0x%x\n", address); /* 28 */
     }
 
-    printf("Base of code section: 0x%x\n", header->opt.BaseOfCode);
-    printf("Base of data section: 0x%x\n", header->opt.BaseOfData);
+    printf("Base of code section: 0x%x\n", opt->BaseOfCode); /* 2c */
+    printf("Base of data section: 0x%x\n", opt->BaseOfData); /* 30 */
 
-    printf("Preferred base address: 0x%x\n", header->opt.ImageBase); /* 34 */
-    printf("Required OS version: %d.%d\n", header->opt.MajorOperatingSystemVersion, header->opt.MinorOperatingSystemVersion); /* 40 */
+    printf("Preferred base address: 0x%x\n", opt->ImageBase); /* 34 */
+    printf("Required OS version: %d.%d\n", opt->MajorOperatingSystemVersion, opt->MinorOperatingSystemVersion); /* 40 */
 
-    if (header->opt.Win32VersionValue != 0)
-        warn("Win32VersionValue is %d (expected 0)\n", header->opt.Win32VersionValue); /* 4c */
+    if (opt->Win32VersionValue != 0)
+        warn("Win32VersionValue is %d (expected 0)\n", opt->Win32VersionValue); /* 4c */
 
-    if (header->opt.Subsystem <= 16) /* 5c */
-        printf("Subsystem: %s\n", subsystems[header->opt.Subsystem]);
+    if (opt->Subsystem <= 16) /* 5c */
+        printf("Subsystem: %s\n", subsystems[opt->Subsystem]);
     else
-        printf("Subsystem: (unknown value %d)\n", header->opt.Subsystem);
-    printf("Subsystem version: %d.%d\n", header->opt.MajorSubsystemVersion, header->opt.MinorSubsystemVersion); /* 48 */
+        printf("Subsystem: (unknown value %d)\n", opt->Subsystem);
+    printf("Subsystem version: %d.%d\n", opt->MajorSubsystemVersion, opt->MinorSubsystemVersion); /* 48 */
 
-    print_dll_flags(header->opt.DllCharacteristics); /* 5e */
+    print_dll_flags(opt->DllCharacteristics); /* 5e */
 
-    printf("Stack size (reserve): %d bytes\n", header->opt.SizeOfStackReserve); /* 60 */
-    printf("Stack size (commit): %d bytes\n", header->opt.SizeOfStackCommit); /* 64 */
-    printf("Heap size (reserve): %d bytes\n", header->opt.SizeOfHeapReserve); /* 68 */
-    printf("Heap size (commit): %d bytes\n", header->opt.SizeOfHeapCommit); /* 6c */
+    printf("Stack size (reserve): %d bytes\n", opt->SizeOfStackReserve); /* 60 */
+    printf("Stack size (commit): %d bytes\n", opt->SizeOfStackCommit); /* 64 */
+    printf("Heap size (reserve): %d bytes\n", opt->SizeOfHeapReserve); /* 68 */
+    printf("Heap size (commit): %d bytes\n", opt->SizeOfHeapCommit); /* 6c */
 
-    if (header->opt.LoaderFlags != 0)
-        warn("LoaderFlags is 0x%x (expected 0)\n", header->opt.LoaderFlags); /* 70 */
+    if (opt->LoaderFlags != 0)
+        warn("LoaderFlags is 0x%x (expected 0)\n", opt->LoaderFlags); /* 70 */
+}
+
+static void print_opt64(struct optional_header_pep *opt) {
+    printf("File version: %d.%d\n", opt->MajorImageVersion, opt->MinorImageVersion); /* 44 */
+
+    printf("Linker version: %d.%d\n", opt->MajorLinkerVersion, opt->MinorLinkerVersion); /* 1a */
+
+    if (opt->AddressOfEntryPoint) {
+        dword address = opt->AddressOfEntryPoint;
+        if (!pe_rel_addr)
+            address += opt->ImageBase;
+        printf("Program entry point: 0x%x\n", address); /* 28 */
+    }
+
+    printf("Base of code section: 0x%x\n", opt->BaseOfCode); /* 2c */
+
+    printf("Preferred base address: 0x%lx\n", opt->ImageBase); /* 30 */
+    printf("Required OS version: %d.%d\n", opt->MajorOperatingSystemVersion, opt->MinorOperatingSystemVersion); /* 40 */
+
+    if (opt->Win32VersionValue != 0)
+        warn("Win32VersionValue is %d (expected 0)\n", opt->Win32VersionValue); /* 4c */
+
+    if (opt->Subsystem <= 16) /* 5c */
+        printf("Subsystem: %s\n", subsystems[opt->Subsystem]);
+    else
+        printf("Subsystem: (unknown value %d)\n", opt->Subsystem);
+    printf("Subsystem version: %d.%d\n", opt->MajorSubsystemVersion, opt->MinorSubsystemVersion); /* 48 */
+
+    print_dll_flags(opt->DllCharacteristics); /* 5e */
+
+    printf("Stack size (reserve): %ld bytes\n", opt->SizeOfStackReserve); /* 60 */
+    printf("Stack size (commit): %ld bytes\n", opt->SizeOfStackCommit); /* 68 */
+    printf("Heap size (reserve): %ld bytes\n", opt->SizeOfHeapReserve); /* 70 */
+    printf("Heap size (commit): %ld bytes\n", opt->SizeOfHeapCommit); /* 78 */
+
+    if (opt->LoaderFlags != 0)
+        warn("LoaderFlags is 0x%x (expected 0)\n", opt->LoaderFlags); /* 80 */
+}
+
+static void print_header(struct pe *pe) {
+    putchar('\n');
+
+    if (!pe->header.SizeOfOptionalHeader) {
+        printf("No optional header\n");
+        return;
+    } else if (pe->header.SizeOfOptionalHeader < sizeof(struct optional_header))
+        warn("Size of optional header is %u (expected at least %lu).\n",
+            pe->header.SizeOfOptionalHeader, sizeof(struct optional_header));
+
+    print_flags(pe->header.Characteristics); /* 16 */
+
+    if (pe->magic == 0x10b) {
+        printf("Image type: 32-bit\n");
+        print_opt32(&pe->opt32);
+    } else if (pe->magic == 0x20b) {
+        printf("Image type: 64-bit\n");
+        print_opt64(&pe->opt64);
+    }
 }
 
 static void print_specfile(struct pe *pe) {
@@ -300,18 +338,31 @@ static void get_reloc_table(struct pe *pe) {
 }
 
 void readpe(long offset_pe, struct pe *pe) {
-    struct optional_header *opt = &pe->header.opt;
-    int i;
+    int i, cdirs;
 
-    fseek(f, offset_pe, SEEK_SET);
-    fread(&pe->header, sizeof(struct header_pe), 1, f);
+    fseek(f, offset_pe + sizeof(dword), SEEK_SET);
+    fread(&pe->header, sizeof(struct file_header), 1, f);
+    pe->magic = read_word();
+    fseek(f, -sizeof(word), SEEK_CUR);
+    if (pe->magic == 0x10b) {
+        fread(&pe->opt32, sizeof(struct optional_header), 1, f);
+        pe->imagebase = pe->opt32.ImageBase;
+        cdirs = pe->opt32.NumberOfRvaAndSizes;
+    } else if (pe->magic == 0x20b) {
+        fread(&pe->opt64, sizeof(struct optional_header_pep), 1, f);
+        pe->imagebase = pe->opt64.ImageBase;
+        cdirs = pe->opt64.NumberOfRvaAndSizes;
+    } else {
+        warn("Don't know how to read image type %#x\n", pe->magic);
+        exit(1);
+    }
 
-    pe->dirs = malloc(opt->NumberOfRvaAndSizes * sizeof(struct directory));
-    fread(pe->dirs, sizeof(struct directory), opt->NumberOfRvaAndSizes, f);
+    pe->dirs = malloc(cdirs * sizeof(struct directory));
+    fread(pe->dirs, sizeof(struct directory), cdirs, f);
 
     /* read the section table */
-    pe->sections = malloc(pe->header.file.NumberOfSections * sizeof(struct section));
-    for (i = 0; i < pe->header.file.NumberOfSections; i++) {
+    pe->sections = malloc(pe->header.NumberOfSections * sizeof(struct section));
+    for (i = 0; i < pe->header.NumberOfSections; i++) {
         fread(&pe->sections[i], 0x28, 1, f);
 
         /* allocate zeroes, but only if it's a code section */
@@ -328,11 +379,11 @@ void readpe(long offset_pe, struct pe *pe) {
      * them in separate "directories". But the order of these seems to be fixed
      * anyway, so why bother? */
 
-    if (opt->NumberOfRvaAndSizes >= 1 && pe->dirs[0].size)
+    if (cdirs >= 1 && pe->dirs[0].size)
         get_export_table(pe);
-    if (opt->NumberOfRvaAndSizes >= 2 && pe->dirs[1].size)
+    if (cdirs >= 2 && pe->dirs[1].size)
         get_import_module_table(pe);
-    if (opt->NumberOfRvaAndSizes >= 6 && pe->dirs[5].size)
+    if (cdirs >= 6 && pe->dirs[5].size)
         get_reloc_table(pe);
 
     /* Read the code. */
@@ -343,7 +394,7 @@ void freepe(struct pe *pe) {
     int i, j;
 
     free(pe->dirs);
-    for (i = 0; i < pe->header.file.NumberOfSections; i++)
+    for (i = 0; i < pe->header.NumberOfSections; i++)
         free(pe->sections[i].instr_flags);
     free(pe->sections);
     free(pe->name);
@@ -388,22 +439,23 @@ void dumppe(long offset_pe) {
      * Internally we want to use relative IPs everywhere possible. The only place
      * that we can't is in arg->value. */
     if (pe_rel_addr == -1)
-        pe_rel_addr = pe.header.file.Characteristics & 0x2000;
+        pe_rel_addr = pe.header.Characteristics & 0x2000;
 
     printf("Module type: PE (Portable Executable)\n");
     if (pe.name) printf("Module name: %s\n", pe.name);
 
     if (mode & DUMPHEADER)
-        print_header(&pe.header);
+        print_header(&pe);
 
     if (mode & DUMPEXPORT) {
         putchar('\n');
         if (pe.exports) {
             printf("Exports:\n");
+
             for (i = 0; i < pe.export_count; i++) {
                 dword address = pe.exports[i].address;
                 if (!pe_rel_addr)
-                    address += pe.header.opt.ImageBase;
+                    address += pe.imagebase;
                 printf("\t%5d\t%#8x\t%s", pe.exports[i].ordinal, address,
                     pe.exports[i].name ? pe.exports[i].name : "<no name>");
                 if (pe.exports[i].address >= pe.dirs[0].address &&

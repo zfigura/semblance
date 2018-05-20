@@ -56,14 +56,44 @@ struct optional_header {
     dword NumberOfRvaAndSizes;          /* 74 */
 };
 
-struct header_pe {
-    dword Signature;                    /* 00 */
+STATIC_ASSERT(sizeof(struct optional_header) == 0x60);
 
-    struct file_header file;            /* 04 */
-    struct optional_header opt;         /* 18 */
+struct optional_header_pep {
+    /* Standard COFF fields. */
+    word  Magic;                        /* 18 */
+    byte  MajorLinkerVersion;           /* 1a */
+    byte  MinorLinkerVersion;           /* 1b */
+    dword SizeOfCode;                   /* 1c */
+    dword SizeOfInitializedData;        /* 20 */
+    dword SizeOfUninitializedData;      /* 24 */
+    dword AddressOfEntryPoint;          /* 28 */
+    dword BaseOfCode;                   /* 2c */
+
+    /* PE fields. */
+    qword ImageBase;                    /* 30 */
+    dword SectionAlignment;             /* 38 */
+    dword FileAlignment;                /* 3c */
+    word  MajorOperatingSystemVersion;  /* 40 */
+    word  MinorOperatingSystemVersion;  /* 42 */
+    word  MajorImageVersion;            /* 44 */
+    word  MinorImageVersion;            /* 46 */
+    word  MajorSubsystemVersion;        /* 48 */
+    word  MinorSubsystemVersion;        /* 4a */
+    dword Win32VersionValue;            /* 4c */
+    dword SizeOfImage;                  /* 50 */
+    dword SizeOfHeaders;                /* 54 */
+    dword CheckSum;                     /* 58 */
+    word  Subsystem;                    /* 5c */
+    word  DllCharacteristics;           /* 5e */
+    qword SizeOfStackReserve;           /* 60 */
+    qword SizeOfStackCommit;            /* 68 */
+    qword SizeOfHeapReserve;            /* 70 */
+    qword SizeOfHeapCommit;             /* 78 */
+    dword LoaderFlags;                  /* 80 */
+    dword NumberOfRvaAndSizes;          /* 84 */
 };
 
-STATIC_ASSERT(sizeof(struct header_pe) == 0x78);
+STATIC_ASSERT(sizeof(struct optional_header_pep) == 0x70);
 
 struct section {
     char  name[8];          /* 00 */
@@ -104,7 +134,14 @@ struct import_module {
 };
 
 struct pe {
-    struct header_pe header;
+    word magic; /* same as opt->Magic field, but avoids casting */
+    qword imagebase; /* same as opt->ImageBase field, but simpler */
+
+    struct file_header header;
+    union {
+        struct optional_header opt32;
+        struct optional_header_pep opt64;
+    };
     struct directory *dirs;
 
     char *name;
