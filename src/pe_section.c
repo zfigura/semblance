@@ -118,7 +118,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     if (!pe_rel_addr)
         absip += pe->header.opt.ImageBase;
 
-    len = get_instr(absip, p, &instr, 1);
+    len = get_instr(ip, p, &instr, 1);
 
     sprintf(ip_string, "%8x", absip);
 

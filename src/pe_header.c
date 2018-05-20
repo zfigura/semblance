@@ -383,7 +383,10 @@ void dumppe(long offset_pe) {
      *
      * Anyway, offer the user the option. Default is to enable relative addressing
      * for DLLs but disable it for EXEs. Note that if they manually enable it,
-     * we won't be able to fix up everything. Caveat emptor. */
+     * we won't be able to fix up everything. Caveat emptor.
+     *
+     * Internally we want to use relative IPs everywhere possible. The only place
+     * that we can't is in arg->value. */
     if (pe_rel_addr == -1)
         pe_rel_addr = pe.header.file.Characteristics & 0x2000;
 
