@@ -125,9 +125,9 @@ struct instr {
     struct arg args[3];
     byte addrsize;
     enum disptype modrm_disp;
-    byte modrm_reg; /* This is a little ugly, but 16 is IP and -1 is none (aka IZ). */
+    char modrm_reg; /* This is a little ugly, but 16 is IP and -1 is none (aka IZ). */
     byte sib_scale;
-    byte sib_index;
+    char sib_index;
     int usedmem:1;  /* used for error checking */
 
     int vex:1;

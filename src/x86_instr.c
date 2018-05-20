@@ -1668,20 +1668,20 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             ret++;
         }
 
-        if (mod == 0 && bits == 64 && rm == 5) {
+        if (mod == 0 && bits == 64 && rm == 5 && !instr->sib_scale) {
             /* IP-relative addressing... */
             arg->value = *((dword *) (p+1));
             instr->modrm_disp = DISP_16;
             instr->modrm_reg = 16;
             ret += 4;
         } else if (mod == 0 && ((instr->addrsize == 16 && rm == 6) ||
-                                (instr->addrsize == 32 && rm == 5))) {
-            if (instr->addrsize == 32) {
-                arg->value = *((dword *) (p+1));
-                ret += 4;
-            } else {
+                                (instr->addrsize != 16 && rm == 5))) {
+            if (instr->addrsize == 16) {
                 arg->value = *((word *) (p+1));
                 ret += 2;
+            } else {
+                arg->value = *((dword *) (p+1));
+                ret += 4;
             }
             instr->modrm_disp = DISP_16;
             instr->modrm_reg = -1;
@@ -2012,7 +2012,8 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                 strcat(out, modrm16_gas[instr->modrm_reg]);
             } else {
                 get_reg16(out, instr->modrm_reg, instr->addrsize);
-                if (instr->sib_scale) {
+                if (instr->sib_scale && instr->sib_index != -1) {
+                    warn("%d\n", instr->sib_index);
                     strcat(out, ",");
                     get_reg16(out, instr->sib_index, instr->addrsize);
                     strcat(out, ",0");
