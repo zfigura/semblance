@@ -32,6 +32,12 @@ static inline dword read_dword(){
     return d;
 }
 
+static inline dword read_qword(){
+    qword q;
+    fread(&q,8,1,f);
+    return q;
+}
+
 static inline void skip_padding(char bytes){
     fseek(f, ((bytes-1) & (bytes-(ftell(f)%bytes)))*sizeof(byte), SEEK_CUR);
 }

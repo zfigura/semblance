@@ -282,17 +282,20 @@ static void get_import_name_table(struct import_module *module, struct pe *pe) {
 
     fseek(f, offset, SEEK_SET);
     count = 0;
-    while (read_dword()) count++;
+    if (pe->magic == 0x10b)
+        while (read_dword()) count++;
+    else
+        while (read_qword()) count++;
 
     module->nametab = malloc(count * sizeof(char *));
 
     fseek(f, offset, SEEK_SET);
     for (i = 0; i < count; i++) {
-        dword address = read_dword();
+        qword address = (pe->magic == 0x10b) ? read_dword() : read_qword();
         if (address & 0x80000000) {
             address &= 0x7fffffff;
-            module->nametab[i] = malloc(snprintf(NULL, 0, "%s.%u", module->module, address));
-            sprintf(module->nametab[i], "%s.%u", module->module, address);
+            module->nametab[i] = malloc(snprintf(NULL, 0, "%s.%lu", module->module, address));
+            sprintf(module->nametab[i], "%s.%lu", module->module, address);
         } else
             module->nametab[i] = fstrdup(addr2offset(address, pe) + 2); /* skip hint */
     }

@@ -74,7 +74,8 @@ static char *get_imported_name(dword offset, const struct pe *pe) {
     offset -= pe->imagebase;
 
     for (i = 0; i < pe->import_count; i++) {
-        unsigned index = (offset - pe->imports[i].nametab_addr) / sizeof(dword);
+        unsigned index = (offset - pe->imports[i].nametab_addr) /
+                         ((pe->magic == 0x10b) ? sizeof(dword) : sizeof(qword));
         if (index < pe->imports[i].count)
             return pe->imports[i].nametab[index];
     }
@@ -115,6 +116,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     char ip_string[9];
     qword absip = ip;
     int bits = (pe->magic == 0x10b) ? 32 : 64;
+    char comment_str[10];
 
     if (!pe_rel_addr)
         absip += pe->imagebase;
@@ -156,6 +158,29 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
             comment = relocate_arg(&instr, &instr.args[0], pe);
         if (instr.args[1].type && sec->instr_flags[instr.args[1].ip - sec->address] & INSTR_RELOC)
             comment = relocate_arg(&instr, &instr.args[1], pe);
+    }
+
+    /* 64-bit does it with IP-relative addressing. */
+    if (!comment && instr.modrm_reg == 16) {
+        dword tip;
+        qword abstip;
+
+        if (instr.args[0].type >= RM && instr.args[0].type <= MEM)
+            tip = ip + len + instr.args[0].value;
+        else
+            tip = ip + len + instr.args[1].value;
+        abstip = tip;
+        if (!pe_rel_addr) abstip += pe->imagebase;
+
+        comment = get_imported_name(tip + pe->imagebase, pe);
+
+        if (!comment)
+            comment = get_export_name(tip, pe);
+
+        if (!comment) {
+            snprintf(comment_str, 10, "%lx", abstip);
+            comment = comment_str;
+        }
     }
 
     print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment, bits);

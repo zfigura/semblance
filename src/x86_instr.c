@@ -1713,13 +1713,13 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
     case XMM:
     case CR32:
     case DR32:
+    case TR32:  /* doesn't exist in 64-bit mode */
         arg->value = REGOF(*p);
         if (instr->prefix & PREFIX_REXR)
             arg->value += 8;
         return 0;
     case MMX:
     case SEG16:
-    case TR32:  /* FIXME: should this go with the above? */
         arg->value = REGOF(*p);
         return 0;
     case REG32:
