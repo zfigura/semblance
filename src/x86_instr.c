@@ -2359,10 +2359,10 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
         suffix_name(instr);
     else if ((instr->op.flags & OP_STRING) && asm_syntax != GAS)
         suffix_name(instr);
-    else if (instr->op.opcode == 0x98 && (instr->prefix & PREFIX_OP32))
-        strcpy(instr->op.name, "cwde");
-    else if (instr->op.opcode == 0x99 && (instr->prefix & PREFIX_OP32))
-        strcpy(instr->op.name, "cdq");
+    else if (instr->op.opcode == 0x98)
+        strcpy(instr->op.name, instr->op.size == 16 ? "cbw" : instr->op.size == 32 ? "cwde" : "cdqe");
+    else if (instr->op.opcode == 0x99)
+        strcpy(instr->op.name, instr->op.size == 16 ? "cwd" : instr->op.size == 32 ? "cdq" : "cqo");
     else if (instr->op.opcode == 0xE3 && (instr->prefix & PREFIX_ADDR32))
         strcpy(instr->op.name, "jecxz");
     else if (instr->op.opcode == 0xD4 && instr->args[0].value == 10) {
