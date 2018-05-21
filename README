@@ -6,7 +6,7 @@ Currently it only contains a single program:
 
 dump - produce disassembly and other information from exectable files.
        Originally written to support NE (New Executable) files due to the lack
-       of any available tool. Currently supports MZ (aka DOS), NE, and PE
+       of any available tool. Currently supports MZ (aka DOS), NE, and PE/PE+
        (Portable Executable, i.e. Win32) executables.
 
 Semblance is free software, released under the GNU GPL v3; see the file
