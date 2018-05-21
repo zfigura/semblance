@@ -1825,7 +1825,7 @@ static int is_reg(enum argtype arg) {
 
 /* With MASM/NASM, use capital letters to help disambiguate them from the following 'h'. */
 
-static void print_arg(char *ip, struct instr *instr, int i) {
+static void print_arg(char *ip, struct instr *instr, int i, int bits) {
     struct arg *arg = &instr->args[i];
     char *out = arg->string;
     qword value = arg->value;
@@ -2108,7 +2108,7 @@ static void print_arg(char *ip, struct instr *instr, int i) {
             get_reg16(out, value, instr->op.size);
         break;
     case REG32:
-        get_reg16(out, value, 32);
+        get_reg16(out, value, bits);
         break;
     case SEG16:
         if (value > 5)
@@ -2386,9 +2386,9 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
 
     /* get the arguments */
 
-    print_arg(ip, instr, 0);
-    print_arg(ip, instr, 1);
-    print_arg(ip, instr, 2);
+    print_arg(ip, instr, 0, bits);
+    print_arg(ip, instr, 1, bits);
+    print_arg(ip, instr, 2, bits);
 
     /* did we find too many prefixes? */
     if (get_prefix(instr->op.opcode, bits)) {
