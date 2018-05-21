@@ -62,6 +62,7 @@ enum argtype {
 #define OP_STACK        0x0100  /* only marked for size if overridden */
 #define OP_STRING       0x0200  /* string operations */
 #define OP_FAR          0x0400  /* far operation */
+#define OP_IMM64        0x0800  /* IMM argument can be 64-bit */
 
 #define OP_S            0x1000  /* (FPU) op takes -s if GCC */
 #define OP_L            0x2000  /* (FPU) op takes -l if GCC */

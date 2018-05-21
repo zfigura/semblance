@@ -472,14 +472,14 @@ static const struct op instructions64[256] = {
     {0xB5, 8,  8, "mov",        CH,     IMM},
     {0xB6, 8,  8, "mov",        DH,     IMM},
     {0xB7, 8,  8, "mov",        BH,     IMM},
-    {0xB8, 8, 16, "mov",        AX,     IMM},
-    {0xB9, 8, 16, "mov",        CX,     IMM},
-    {0xBA, 8, 16, "mov",        DX,     IMM},
-    {0xBB, 8, 16, "mov",        BX,     IMM},
-    {0xBC, 8, 16, "mov",        SP,     IMM},
-    {0xBD, 8, 16, "mov",        BP,     IMM},
-    {0xBE, 8, 16, "mov",        SI,     IMM},
-    {0xBF, 8, 16, "mov",        DI,     IMM},
+    {0xB8, 8, 16, "mov",        AX,     IMM,    OP_IMM64},
+    {0xB9, 8, 16, "mov",        CX,     IMM,    OP_IMM64},
+    {0xBA, 8, 16, "mov",        DX,     IMM,    OP_IMM64},
+    {0xBB, 8, 16, "mov",        BX,     IMM,    OP_IMM64},
+    {0xBC, 8, 16, "mov",        SP,     IMM,    OP_IMM64},
+    {0xBD, 8, 16, "mov",        BP,     IMM,    OP_IMM64},
+    {0xBE, 8, 16, "mov",        SI,     IMM,    OP_IMM64},
+    {0xBF, 8, 16, "mov",        DI,     IMM,    OP_IMM64},
     {0xC0, 8},  /* rotate/shift */
     {0xC1, 8},  /* rotate/shift */
     {0xC2, 8,  0, "ret",        IMM16,  0,      OP_STOP},
@@ -1605,6 +1605,9 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         } else if (instr->op.size == 16) {
             arg->value = *((word *) p);
             return 2;
+        } else if (instr->op.size == 64 && (instr->op.flags & OP_IMM64)) {
+            arg->value = *((qword *) p);
+            return 8;
         } else {
             arg->value = *((dword *) p);
             return 4;
@@ -1863,6 +1866,8 @@ static void print_arg(char *ip, struct instr *instr, int i) {
                 sprintf(out, (asm_syntax == GAS) ? "$0x%02lx" : "%02lXh", value);
             else if (instr->op.size == 16)
                 sprintf(out, (asm_syntax == GAS) ? "$0x%04lx" : "%04lXh", value);
+            else if (instr->op.size == 64 && (instr->op.flags & OP_IMM64))
+                sprintf(out, (asm_syntax == GAS) ? "$0x%016lx" : "%016lXh", value);
             else
                 sprintf(out, (asm_syntax == GAS) ? "$0x%08lx" : "%08lXh", value);
         }
