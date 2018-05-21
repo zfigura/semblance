@@ -1699,12 +1699,12 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             if (instr->prefix & PREFIX_REXB) instr->modrm_reg += 8;
             ret += 1;
         } else if (mod == 2) {
-            if (instr->addrsize == 32) {
-                arg->value = *((dword *) (p+1));
-                ret += 4;
-            } else {
+            if (instr->addrsize == 16) {
                 arg->value = *((word *) (p+1));
                 ret += 2;
+            } else {
+                arg->value = *((dword *) (p+1));
+                ret += 4;
             }
             instr->modrm_disp = DISP_16;
             instr->modrm_reg = rm;
@@ -1845,7 +1845,9 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
         break;
     case IMM8:
         if (instr->op.flags & OP_STACK) { /* 6a */
-            if (instr->op.size == 32)
+            if (instr->op.size == 64)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%016lx" : "qword %016lxh", (qword) (int8_t) value);
+            else if (instr->op.size == 32)
                 sprintf(out, (asm_syntax == GAS) ? "$0x%08x" : "dword %08Xh", (dword) (int8_t) value);
             else
                 sprintf(out, (asm_syntax == GAS) ? "$0x%04x" : "word %04Xh", (word) (int8_t) value);
@@ -1857,7 +1859,9 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
         break;
     case IMM:
         if (instr->op.flags & OP_STACK) {
-            if (instr->op.size == 32)
+            if (instr->op.size == 64)
+                sprintf(out, (asm_syntax == GAS) ? "$0x%016lx" : "qword %016lXh", value);
+            else if (instr->op.size == 32)
                 sprintf(out, (asm_syntax == GAS) ? "$0x%08lx" : "dword %08lXh", value);
             else
                 sprintf(out, (asm_syntax == GAS) ? "$0x%04lx" : "word %04lXh", value);
@@ -2014,7 +2018,6 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
             } else {
                 get_reg16(out, instr->modrm_reg, instr->addrsize);
                 if (instr->sib_scale && instr->sib_index != -1) {
-                    warn("%d\n", instr->sib_index);
                     strcat(out, ",");
                     get_reg16(out, instr->sib_index, instr->addrsize);
                     strcat(out, ",0");
@@ -2170,6 +2173,26 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
     }
 }
 
+/* helper to tack a length suffix onto a name */
+static void suffix_name(struct instr *instr) {
+    if ((instr->op.flags & OP_LL) == OP_LL)
+        strcat(instr->op.name, "ll");
+    else if (instr->op.flags & OP_S)
+        strcat(instr->op.name, "s");
+    else if (instr->op.flags & OP_L)
+        strcat(instr->op.name, "l");
+    else if (instr->op.size == 80)
+        strcat(instr->op.name, "t");
+    else if (instr->op.size == 8)
+        strcat(instr->op.name, "b");
+    else if (instr->op.size == 16)
+        strcat(instr->op.name, "w");
+    else if (instr->op.size == 32)
+        strcat(instr->op.name, (asm_syntax == GAS) ? "l" : "d");
+    else if (instr->op.size == 64)
+        strcat(instr->op.name, "q");
+}
+
 /* Paramters:
  * ip    - current IP (used to calculate relative addresses)
  * p     - pointer to the current instruction to be parsed
@@ -2315,21 +2338,28 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
     }
 
     /* modify the instruction name if appropriate */
-    if ((instr->op.flags & OP_STACK) && (instr->prefix & PREFIX_OP32)) {
-        if (instr->op.size == 16)
-            strcat(instr->op.name, "w");
-        else if (instr->op.size == 64)
-            strcat(instr->op.name, "q");
-        else
-            strcat(instr->op.name, (asm_syntax == GAS) ? "l" : "d");
-    } else if ((instr->op.flags & OP_STRING) && asm_syntax != GAS) {
-        if (instr->op.size == 8)
-            strcat(instr->op.name, "b");
-        else if (instr->op.size == 16)
-            strcat(instr->op.name, "w");
-        else if (instr->op.size == 32)
-            strcat(instr->op.name, "d");
-    } else if (instr->op.opcode == 0x98 && (instr->prefix & PREFIX_OP32))
+
+    if (asm_syntax == GAS) {
+        if (instr->op.opcode == 0x0FB6) {
+            strcpy(instr->op.name, "movzb");
+            suffix_name(instr);
+        } else if (instr->op.opcode == 0x0FB7) {
+            strcpy(instr->op.name, "movzw");
+            suffix_name(instr);
+        } else if (instr->op.opcode == 0x0FBE) {
+            strcpy(instr->op.name, "movsb");
+            suffix_name(instr);
+        } else if (instr->op.opcode == 0x0FBF) {
+            strcpy(instr->op.name, "movsw");
+            suffix_name(instr);
+        }
+    }
+
+    if ((instr->op.flags & OP_STACK) && (instr->prefix & PREFIX_OP32))
+        suffix_name(instr);
+    else if ((instr->op.flags & OP_STRING) && asm_syntax != GAS)
+        suffix_name(instr);
+    else if (instr->op.opcode == 0x98 && (instr->prefix & PREFIX_OP32))
         strcpy(instr->op.name, "cwde");
     else if (instr->op.opcode == 0x99 && (instr->prefix & PREFIX_OP32))
         strcpy(instr->op.name, "cdq");
@@ -2345,34 +2375,9 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
         if (instr->op.flags & OP_FAR) {
             memmove(instr->op.name+1, instr->op.name, strlen(instr->op.name));
             instr->op.name[0] = 'l';
-        } else if (instr->op.opcode == 0x0FB6)   /* movzx */
-            strcpy(instr->op.name, (instr->op.size == 32) ? "movzbl" : "movzbw");
-        else if (instr->op.opcode == 0x0FB7)     /* movzx */
-            strcpy(instr->op.name, (instr->op.size == 32) ? "movzwl" : "movzww");
-        else if (instr->op.opcode == 0x0FBE)     /* movsx */
-            strcpy(instr->op.name, (instr->op.size == 32) ? "movsbl" : "movsbw");
-        else if (instr->op.opcode == 0x0FBF)     /* movsx */
-            strcpy(instr->op.name, (instr->op.size == 32) ? "movswl" : "movsww");
-        else if (!is_reg(instr->op.arg0) &&
-                 !is_reg(instr->op.arg1) &&
-                 instr->modrm_disp != DISP_REG) {
-            if ((instr->op.flags & OP_LL) == OP_LL)
-                strcat(instr->op.name, "ll");
-            else if (instr->op.flags & OP_S)
-                strcat(instr->op.name, "s");
-            else if (instr->op.flags & OP_L)
-                strcat(instr->op.name, "l");
-            else if (instr->op.size == 80)
-                strcat(instr->op.name, "t");
-            else if (instr->op.size == 8)
-                strcat(instr->op.name, "b");
-            else if (instr->op.size == 16)
-                strcat(instr->op.name, "w");
-            else if (instr->op.size == 32)
-                strcat(instr->op.name, "l");
-            else if (instr->op.size == 64)
-                strcat(instr->op.name, "q");
-        }
+        } else if (!is_reg(instr->op.arg0) && !is_reg(instr->op.arg1) &&
+                   instr->modrm_disp != DISP_REG)
+            suffix_name(instr);
     } else if (asm_syntax != GAS && (instr->op.opcode == 0xCA || instr->op.opcode == 0xCB))
         strcat(instr->op.name, "f");
 
