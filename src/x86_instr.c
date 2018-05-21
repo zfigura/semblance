@@ -1433,7 +1433,7 @@ static const struct op instructions_sse_single_op32[] = {
 /* returns the flag if it's a prefix, 0 otherwise */
 static word get_prefix(word opcode, int bits) {
     if (bits == 64) {
-        if ((opcode & 0xF0) == 0x40)
+        if ((opcode & 0xFFF0) == 0x40)
             return PREFIX_REX | ((opcode & 0xF) * 0x1000);
     }
 
