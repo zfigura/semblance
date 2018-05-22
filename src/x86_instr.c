@@ -763,7 +763,13 @@ static const struct op instructions_0F[] = {
     {0xAB, 8, -1, "bts",        RM,     REG,    OP_LOCK},
     {0xAC, 8, -1, "shrd",       RM,     REG,    OP_ARG2_IMM8},
     {0xAD, 8, -1, "shrd",       RM,     REG,    OP_ARG2_CL},
-    /* AE unused */
+    {0xAE, 0,  0, "fxsave",     MEM},
+    {0xAE, 1,  0, "fxrstor",    MEM},
+    {0xAE, 2,  0, "ldmxcsr",    MEM},
+    {0xAE, 3,  0, "stmxcsr",    MEM},
+    {0xAE, 4,  0, "xsave",      MEM},
+    {0xAE, 5,  0, "xrstor",     MEM},
+    {0xAE, 7,  0, "clflush",    MEM},
     {0xAF, 8, -1, "imul",       REG,    RM},
     {0xB0, 8,  8, "cmpxchg",    RM,     REG,    OP_LOCK},
     {0xB1, 8, -1, "cmpxchg",    RM,     REG,    OP_LOCK},
@@ -1548,6 +1554,13 @@ static int get_0f_instr(const byte *p, struct instr *instr) {
         case 0xD1: strcpy(instr->op.name, "xsetbv"); break;
         case 0xF9: strcpy(instr->op.name, "rdtscp"); break;
         }
+        return 1;
+    } else if (p[0] == 0xAE && MODOF(p[1]) == 3) {
+        instr->op.opcode = 0x0FAE;
+        instr->op.subcode = subcode;
+        if (subcode == 0x5) strcpy(instr->op.name, "lfence");
+        if (subcode == 0x6) strcpy(instr->op.name, "mfence");
+        if (subcode == 0x7) strcpy(instr->op.name, "sfence");
         return 1;
     }
 
