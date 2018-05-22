@@ -183,6 +183,13 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
         }
     }
 
+    /* We deal in relative addresses internally everywhere. That means we have
+     * to fix up the values for relative jumps if we're not displaying relative
+     * addresses. */
+    if ((instr.op.arg0 == REL8 || instr.op.arg0 == REL16) && !pe_rel_addr) {
+        instr.args[0].value += pe->imagebase;
+    }
+
     print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment, bits);
 
     return len;
