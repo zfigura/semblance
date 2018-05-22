@@ -52,12 +52,13 @@ enum argtype {
 #define OP_ARG2_IMM     0x0001  /* has IMM16/32 as third argument */
 #define OP_ARG2_IMM8    0x0002  /* has IMM8 as third argument */
 #define OP_ARG2_CL      0x0004  /* has CL as third argument */
+#define OP_64           0x0008  /* opcodes which are 64-bit by default (call, jmp), most being 32-bit */
 
-#define OP_LOCK         0x0008  /* lock prefix valid */
 #define OP_REPNE        0x0010  /* repne prefix valid */
 #define OP_REPE         0x0020  /* repe prefix valid */
 #define OP_REP          OP_REPE /* rep prefix valid */
 #define OP_OP32_REGONLY 0x0040  /* operand-size prefix only valid if used with reg */
+#define OP_LOCK         0x0080  /* lock prefix valid */
 
 #define OP_STACK        0x0100  /* only marked for size if overridden */
 #define OP_STRING       0x0200  /* string operations */
@@ -75,7 +76,7 @@ enum argtype {
 struct op {
     word opcode;
     byte subcode;
-    byte size;  /* one of: 8, 16, 32, 64, 80, or 0 if not sized */
+    char size;  /* 0 if not sized, -1 if size == bitness */
     char name[11];
     enum argtype arg0; /* usually dest */
     enum argtype arg1; /* usually src */
