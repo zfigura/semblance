@@ -265,10 +265,10 @@ static const struct op instructions[256] = {
     {0xE9, 8,  0, "jmp",        REL16,  0,      OP_BRANCH|OP_STOP},
     {0xEA, 8, -1, "jmp",        PTR32,  0,      OP_FAR|OP_STOP},    /* a change in bitness should only happen across segment boundaries */
     {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
-    {0xEC, 8,  8, "in",         AL,     DX},
-    {0xED, 8, -1, "in",         AX,     DX},
-    {0xEE, 8,  8, "out",        DX,     AL},
-    {0xEF, 8, -1, "out",        DX,     AX},
+    {0xEC, 8,  8, "in",         AL,     DXS},
+    {0xED, 8, -1, "in",         AX,     DXS},
+    {0xEE, 8,  8, "out",        DXS,    AL},
+    {0xEF, 8, -1, "out",        DXS,    AX},
     {0xF0, 8,  0, "lock"},      /* lock prefix */
     {0xF1, 8},  /* undefined (fixme: int1/icebp?) */
     {0xF2, 8,  0, "repne"},     /* repne prefix */
@@ -524,10 +524,10 @@ static const struct op instructions64[256] = {
     {0xE9, 8,  0, "jmp",        REL16,  0,      OP_BRANCH|OP_STOP},
     {0xEA, 8},  /* undefined (was jmp/PTR32) */
     {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
-    {0xEC, 8,  0, "in",         AL,     DX},
-    {0xED, 8,  0, "in",         AX,     DX},
-    {0xEE, 8,  0, "out",        DX,     AL},
-    {0xEF, 8,  0, "out",        DX,     AX},
+    {0xEC, 8,  0, "in",         AL,     DXS},
+    {0xED, 8,  0, "in",         AX,     DXS},
+    {0xEE, 8,  0, "out",        DXS,    AL},
+    {0xEF, 8,  0, "out",        DXS,    AX},
     {0xF0, 8,  0, "lock"},      /* lock prefix */
     {0xF1, 8},  /* undefined (fixme: int1/icebp?) */
     {0xF2, 8,  0, "repne"},     /* repne prefix */
