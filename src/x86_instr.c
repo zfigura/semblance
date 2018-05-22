@@ -2522,6 +2522,6 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
         for (i=7; i<len; i++) {
             out += sprintf(out, "%02x ", p[i]);
         }
-        out--; /* trailing space */
+        *--out = 0; /* trailing space */
     }
 }
