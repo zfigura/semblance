@@ -691,6 +691,8 @@ static const struct op instructions_0F[] = {
     {0x08, 8,  0, "invd"},
     {0x09, 8,  0, "wbinvd"},
 
+    {0x0d, 8, -1, "prefetch",   RM},    /* Intel has NOP here; we're just following GCC */
+
     {0x1f, 8, -1, "nop",        RM},
 
     {0x20, 8, -1, "mov",        REG32,  CR32},  /* here mod is simply ignored */
