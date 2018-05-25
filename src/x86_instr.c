@@ -233,7 +233,7 @@ static const struct op instructions[256] = {
     {0xC9, 8,  0, "leave"},
     {0xCA, 8,  0, "ret",        IMM16,  0,      OP_STOP|OP_FAR},    /* a change in bitness should only happen across segment boundaries */
     {0xCB, 8,  0, "ret",        0,      0,      OP_STOP|OP_FAR},
-    {0xCC, 8,  0, "int3"},
+    {0xCC, 8,  0, "int3",       0,      0,      OP_STOP},
     {0xCD, 8,  0, "int",        IMM8},
     {0xCE, 8,  0, "into"},
     {0xCF, 8,  0, "iret",       0,      0,      OP_STOP},
@@ -492,7 +492,7 @@ static const struct op instructions64[256] = {
     {0xC9, 8,  0, "leave"},
     {0xCA, 8,  0, "ret",        IMM16,  0,      OP_STOP|OP_FAR},    /* a change in bitness should only happen across segment boundaries */
     {0xCB, 8,  0, "ret",        0,      0,      OP_STOP|OP_FAR},
-    {0xCC, 8,  0, "int3"},
+    {0xCC, 8,  0, "int3",       0,      0,      OP_STOP},
     {0xCD, 8,  0, "int",        IMM8},
     {0xCE, 8,  0, "into"},
     {0xCF, 8,  0, "iret",       0,      0,      OP_STOP},
