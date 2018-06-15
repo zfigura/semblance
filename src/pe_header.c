@@ -306,14 +306,15 @@ static void get_import_name_table(struct import_module *module, struct pe *pe) {
 
 static void get_import_module_table(struct pe *pe) {
     long offset = addr2offset(pe->dirs[1].address, pe);
+    static const dword zeroes[5] = {0};
+    dword entry[5];
     int i;
 
     fseek(f, offset, SEEK_SET);
     pe->import_count = 0;
-    while (read_dword()) {
-        fseek(f, 4 * sizeof(dword), SEEK_CUR);
+
+    while (fread(entry, sizeof(dword), 5, f) == 5 && memcmp(entry, zeroes, sizeof(entry)))
         pe->import_count++;
-    }
 
     pe->imports = malloc(pe->import_count * sizeof(struct import_module));
 
