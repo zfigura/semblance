@@ -439,6 +439,11 @@ void read_sections(struct pe *pe) {
     for (i = 0; i < pe->reloc_count; i++) {
         dword address = pe->reloc_base + pe->relocs[i].offset;
         struct section *sec = addr2section(address, pe);
+        if (!sec)
+        {
+            warn("Relocation at %#x isn't in a section?\n", address);
+            continue;
+        }
         if (sec->flags & 0x20) {
             /* Anything that's relocated in a code segment is almost certainly a function. */
             sec->instr_flags[address - sec->address] |= INSTR_RELOC;
@@ -449,6 +454,11 @@ void read_sections(struct pe *pe) {
     for (i = 0; i < pe->export_count; i++) {
         dword address = pe->exports[i].address;
         struct section *sec = addr2section(address, pe);
+        if (!sec)
+        {
+            warn("Export %s at %#x isn't in a section?\n", pe->exports[i].name, pe->exports[i].address);
+            continue;
+        }
         if (sec->flags & 0x20 && !(address >= pe->dirs[0].address &&
             address < (pe->dirs[0].address + pe->dirs[0].size))) {
             sec->instr_flags[address - sec->address] |= INSTR_FUNC;
@@ -461,7 +471,7 @@ void read_sections(struct pe *pe) {
         struct section *sec = addr2section(entry_point, pe);
         if (!sec)
             warn("Entry point %#x isn't in a section?\n", entry_point);
-        if (sec->flags & 0x20) {
+        else if (sec->flags & 0x20) {
             sec->instr_flags[entry_point - sec->address] |= INSTR_FUNC;
             scan_segment(entry_point, pe);
         }
