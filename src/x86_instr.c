@@ -703,6 +703,13 @@ static const struct op instructions_0F[] = {
     /* 25 unused */
     {0x26, 8, -1, "mov",        TR32,   REG32},
 
+    {0x30, 8, -1, "wrmsr"},
+    {0x31, 8, -1, "rdtsc"},
+    {0x32, 8, -1, "rdmsr"},
+    {0x33, 8, -1, "rdpmc"},
+    {0x34, 8, -1, "sysenter"},
+    {0x35, 8, -1, "sysexit"},
+
     {0x40, 8, -1, "cmovo",      REG,    RM},
     {0x41, 8, -1, "cmovno",     REG,    RM},
     {0x42, 8, -1, "cmovb",      REG,    RM},
