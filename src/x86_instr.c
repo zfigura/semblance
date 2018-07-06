@@ -169,11 +169,11 @@ static const struct op instructions[256] = {
     {0x89, 8, -1, "mov",        RM,     REG},
     {0x8A, 8,  8, "mov",        REG,    RM},
     {0x8B, 8, -1, "mov",        REG,    RM},
-    {0x8C, 8,  0, "mov",        RM,     SEG16},
+    {0x8C, 8, -1, "mov",        RM,     SEG16}, /* fixme: should we replace eax with ax? */
     {0x8D, 8, -1, "lea",        REG,    MEM},
     {0x8E, 8,  0, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
     {0x8F, 8},  /* pop (subcode 0 only) */
-    {0x90, 8,  0, "nop"},
+    {0x90, 8, -1, "nop"},
     {0x91, 8, -1, "xchg",       AX,     CX},
     {0x92, 8, -1, "xchg",       AX,     DX},
     {0x93, 8, -1, "xchg",       AX,     BX},
@@ -224,7 +224,7 @@ static const struct op instructions[256] = {
     {0xC0, 8},  /* rotate/shift */
     {0xC1, 8},  /* rotate/shift */
     {0xC2, 8,  0, "ret",        IMM16,  0,      OP_STOP},           /* fixme: can take OP32... */
-    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP|OP_REP},
+    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP|OP_REPE|OP_REPNE},
     {0xC4, 8, -1, "les",        REG,    MEM},
     {0xC5, 8, -1, "lds",        REG,    MEM},
     {0xC6, 0},  /* mov (subcode 0 only) */
@@ -428,11 +428,11 @@ static const struct op instructions64[256] = {
     {0x89, 8, -1, "mov",        RM,     REG},
     {0x8A, 8,  8, "mov",        REG,    RM},
     {0x8B, 8, -1, "mov",        REG,    RM},
-    {0x8C, 8,  0, "mov",        RM,     SEG16},
-    {0x8D, 8, 16, "lea",        REG,    MEM},
+    {0x8C, 8, -1, "mov",        RM,     SEG16},
+    {0x8D, 8, -1, "lea",        REG,    MEM},
     {0x8E, 8,  0, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
     {0x8F, 8},  /* pop (subcode 0 only) */
-    {0x90, 8,  0, "nop"},
+    {0x90, 8, -1, "nop"},
     {0x91, 8, -1, "xchg",       AX,     CX},
     {0x92, 8, -1, "xchg",       AX,     DX},
     {0x93, 8, -1, "xchg",       AX,     BX},
@@ -483,7 +483,7 @@ static const struct op instructions64[256] = {
     {0xC0, 8},  /* rotate/shift */
     {0xC1, 8},  /* rotate/shift */
     {0xC2, 8,  0, "ret",        IMM16,  0,      OP_STOP},
-    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP|OP_REP},
+    {0xC3, 8,  0, "ret",        0,      0,      OP_STOP|OP_REPE|OP_REPNE},
     {0xC4, 8},  /* undefined (was les) */
     {0xC5, 8},  /* undefined (was lds) */
     {0xC6, 0},  /* mov (subcode 0 only) */
@@ -2239,6 +2239,9 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
         if ((instr->prefix & PREFIX_SEG_MASK) && (prefix & PREFIX_SEG_MASK)) {
             instr->op = instructions[p[len]];
             instr->prefix &= ~PREFIX_SEG_MASK;
+        } else if (instr->prefix & prefix & PREFIX_OP32) {
+            /* Microsoft likes to repeat this on NOPs for alignment, so just
+             * ignore it */
         } else if (instr->prefix & prefix) {
             instr->op = instructions[p[len]];
             instr->prefix &= ~prefix;
