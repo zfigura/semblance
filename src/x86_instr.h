@@ -77,7 +77,7 @@ struct op {
     word opcode;
     byte subcode;
     char size;  /* 0 if not sized, -1 if size == bitness */
-    char name[11];
+    char name[12];
     enum argtype arg0; /* usually dest */
     enum argtype arg1; /* usually src */
     /* arg2 only for imul, shrd, shld */
