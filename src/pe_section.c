@@ -430,6 +430,7 @@ static void print_section_flags(dword flags) {
  * of them. Fortunately we actually have everything we need already. */
 
 void read_sections(struct pe *pe) {
+    dword entry_point = (pe->magic == 0x10b) ? pe->opt32.AddressOfEntryPoint : pe->opt64.AddressOfEntryPoint;
     int i;
 
     /* We already read the section header (unlike NE, we had to in order to read
@@ -466,8 +467,7 @@ void read_sections(struct pe *pe) {
         }
     }
 
-    if (!(pe->header.Characteristics & 0x2000)) {
-        dword entry_point = (pe->magic == 0x10b) ? pe->opt32.AddressOfEntryPoint : pe->opt64.AddressOfEntryPoint;
+    if (entry_point) {
         struct section *sec = addr2section(entry_point, pe);
         if (!sec)
             warn("Entry point %#x isn't in a section?\n", entry_point);
