@@ -113,7 +113,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
     struct instr instr = {0};
     unsigned len;
     char *comment = NULL;
-    char ip_string[9];
+    char ip_string[17];
     qword absip = ip;
     int bits = (pe->magic == 0x10b) ? 32 : 64;
     char comment_str[10];
