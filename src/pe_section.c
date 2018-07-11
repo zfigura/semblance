@@ -354,8 +354,6 @@ static void scan_segment(dword ip, struct pe *pe) {
                 fseek(f, sec->offset + i, SEEK_SET);
                 switch (r->type)
                 {
-                case 0: /* padding */
-                    break;
                 case 3: /* HIGHLOW */
                     if (pe->magic != 0x10b)
                         warn_at("HIGHLOW relocation in 64-bit image?\n");
@@ -446,9 +444,18 @@ void read_sections(struct pe *pe) {
             continue;
         }
         if (sec->flags & 0x20) {
-            /* Anything that's relocated in a code segment is almost certainly a function. */
-            sec->instr_flags[address - sec->address] |= INSTR_RELOC;
-            /* scanning is done in scan_segment() */
+            switch (pe->relocs[i].type) {
+            case 0: /* padding */
+                break;
+            case 3: /* HIGHLOW */
+                /* scanning is done in scan_segment() */
+                sec->instr_flags[address - sec->address] |= INSTR_RELOC;
+                break;
+            default:
+                warn("%#x: Don't know how to handle relocation type %d\n",
+                    pe->relocs[i].offset, pe->relocs[i].type);
+                break;
+            }
         }
     }
 
