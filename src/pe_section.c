@@ -83,7 +83,7 @@ static char *get_imported_name(dword offset, const struct pe *pe) {
 }
 
 /* index function */
-static const struct reloc_pe *get_reloc(word ip, const struct pe *pe) {
+static const struct reloc_pe *get_reloc(dword ip, const struct pe *pe) {
     unsigned i;
     for (i=0; i<pe->reloc_count; i++) {
         if (pe->reloc_base + pe->relocs[i].offset == ip)
