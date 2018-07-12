@@ -806,6 +806,8 @@ static const struct op instructions_0F[] = {
     {0xC0, 8,  8, "xadd",       RM,     REG,    OP_LOCK},
     {0xC1, 8, -1, "xadd",       RM,     REG,    OP_LOCK},
 
+    {0xC7, 1,  0, "cmpxchg8b",  MEM,    0,      OP_LOCK},
+
     {0xC8, 8, -1, "bswap",      AX},
     {0xC9, 8, -1, "bswap",      CX},
     {0xCA, 8, -1, "bswap",      DX},
@@ -2406,7 +2408,9 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
     } else if (instr->op.opcode == 0xD5 && instr->args[0].value == 10) {
         strcpy(instr->op.name, "aad");
         instr->op.arg0 = NONE;
-    } else if (asm_syntax == GAS) {
+    } else if (instr->op.opcode == 0x0FC7 && instr->op.subcode == 1 && (instr->prefix & PREFIX_REXW))
+        strcpy(instr->op.name, "cmpxchg16b");
+    else if (asm_syntax == GAS) {
         if (instr->op.flags & OP_FAR) {
             memmove(instr->op.name+1, instr->op.name, strlen(instr->op.name));
             instr->op.name[0] = 'l';
