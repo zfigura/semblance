@@ -173,7 +173,7 @@ static const struct op instructions[256] = {
     {0x8D, 8, -1, "lea",        REG,    MEM},
     {0x8E, 8,  0, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
     {0x8F, 8},  /* pop (subcode 0 only) */
-    {0x90, 8, -1, "nop"},
+    {0x90, 8, -1, "nop",        0,      0,      OP_REP},
     {0x91, 8, -1, "xchg",       AX,     CX},
     {0x92, 8, -1, "xchg",       AX,     DX},
     {0x93, 8, -1, "xchg",       AX,     BX},
@@ -432,7 +432,7 @@ static const struct op instructions64[256] = {
     {0x8D, 8, -1, "lea",        REG,    MEM},
     {0x8E, 8,  0, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
     {0x8F, 8},  /* pop (subcode 0 only) */
-    {0x90, 8, -1, "nop"},
+    {0x90, 8, -1, "nop",        0,      0,      OP_REP},
     {0x91, 8, -1, "xchg",       AX,     CX},
     {0x92, 8, -1, "xchg",       AX,     DX},
     {0x93, 8, -1, "xchg",       AX,     BX},
