@@ -685,9 +685,9 @@ static const struct op instructions_0F[] = {
     {0x02, 8, -1, "lar",        REG,    RM,     OP_OP32_REGONLY},       /* fixme: should be RM16 */
     {0x03, 8, -1, "lsl",        REG,    RM,     OP_OP32_REGONLY},       /* fixme: should be RM16 */
     /* 04 unused */
-    /* 05 unused (fixme: loadall? syscall?) */
+    {0x05, 8,  0, "syscall"},
     {0x06, 8,  0, "clts"},
-    /* 07 unused (fixme: loadall? sysret?) */
+    {0x07, 8,  0, "sysret"},
     {0x08, 8,  0, "invd"},
     {0x09, 8,  0, "wbinvd"},
 
