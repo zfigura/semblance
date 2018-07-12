@@ -1963,7 +1963,7 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
     case DXS:
         if (asm_syntax == GAS)
             strcpy(out, "(%dx)");
-        else if (asm_syntax == MASM)
+        else
             strcpy(out, "dx");
         break;
     /* register/memory. this is always the first byte after the opcode,
