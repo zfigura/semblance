@@ -1760,6 +1760,8 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
     case MMXONLY:
     case XMMONLY:
         arg->value = MEMOF(*p);
+        if (instr->prefix & PREFIX_REXB)
+            arg->value += 8;
         return 1;
     /* all others should be implicit */
     default:
