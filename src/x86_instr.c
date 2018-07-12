@@ -2367,7 +2367,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
 
         /* registers that read from the modrm byte, which we might have just processed */
         if (instr->op.arg1 >= REG && instr->op.arg1 <= TR32)
-            get_arg(ip+len, &p[base], &instr->args[1], instr, bits);
+            len += get_arg(ip+len, &p[base], &instr->args[1], instr, bits);
         else
             len += get_arg(ip+len, &p[len], &instr->args[1], instr, bits);
 
