@@ -2148,8 +2148,17 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
         get_seg16(out, value);
         break;
     case CR32:
-        if (value == 1 || value > 4)
+        switch (value) {
+        case 0:
+        case 2:
+        case 3:
+        case 4:
+        case 8:
+            break;
+        default:
             warn_at("Invalid control register %ld\n", value);
+            break;
+        }
         if (asm_syntax == GAS)
             strcat(out, "%");
         strcat(out, "cr0");
