@@ -171,7 +171,7 @@ static const struct op instructions[256] = {
     {0x8B, 8, -1, "mov",        REG,    RM},
     {0x8C, 8, -1, "mov",        RM,     SEG16}, /* fixme: should we replace eax with ax? */
     {0x8D, 8, -1, "lea",        REG,    MEM},
-    {0x8E, 8,  0, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
+    {0x8E, 8, -1, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
     {0x8F, 8},  /* pop (subcode 0 only) */
     {0x90, 8, -1, "nop",        0,      0,      OP_REP},
     {0x91, 8, -1, "xchg",       AX,     CX},
@@ -430,7 +430,7 @@ static const struct op instructions64[256] = {
     {0x8B, 8, -1, "mov",        REG,    RM},
     {0x8C, 8, -1, "mov",        RM,     SEG16},
     {0x8D, 8, -1, "lea",        REG,    MEM},
-    {0x8E, 8,  0, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
+    {0x8E, 8, -1, "mov",        SEG16,  RM,     OP_OP32_REGONLY},
     {0x8F, 8},  /* pop (subcode 0 only) */
     {0x90, 8, -1, "nop",        0,      0,      OP_REP},
     {0x91, 8, -1, "xchg",       AX,     CX},
@@ -524,10 +524,10 @@ static const struct op instructions64[256] = {
     {0xE9, 8,  0, "jmp",        REL16,  0,      OP_BRANCH|OP_STOP},
     {0xEA, 8},  /* undefined (was jmp/PTR32) */
     {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
-    {0xEC, 8,  0, "in",         AL,     DXS},
-    {0xED, 8,  0, "in",         AX,     DXS},
-    {0xEE, 8,  0, "out",        DXS,    AL},
-    {0xEF, 8,  0, "out",        DXS,    AX},
+    {0xEC, 8,  8, "in",         AL,     DXS},
+    {0xED, 8, -1, "in",         AX,     DXS},
+    {0xEE, 8,  8, "out",        DXS,    AL},
+    {0xEF, 8, -1, "out",        DXS,    AX},
     {0xF0, 8,  0, "lock"},      /* lock prefix */
     {0xF1, 8},  /* undefined (fixme: int1/icebp?) */
     {0xF2, 8,  0, "repne"},     /* repne prefix */
