@@ -845,7 +845,7 @@ static const struct op instructions_fpu_m[64] = {
     {0xDA, 6, 32, "fidiv",      MEM,    0,      OP_L},
     {0xDA, 7, 32, "fidivr",     MEM,    0,      OP_L},
     {0xDB, 0, 32, "fild",       MEM,    0,      OP_L},
-    {0xDB, 1},
+    {0xDB, 1, 32, "fisttp",     MEM,    0,      OP_L},
     {0xDB, 2, 32, "fist",       MEM,    0,      OP_L},
     {0xDB, 3, 32, "fistp",      MEM,    0,      OP_L},
     {0xDB, 4},
@@ -861,7 +861,7 @@ static const struct op instructions_fpu_m[64] = {
     {0xDC, 6, 64, "fdiv",       MEM,    0,      OP_L},
     {0xDC, 7, 64, "fdivr",      MEM,    0,      OP_L},
     {0xDD, 0, 64, "fld",        MEM,    0,      OP_L},
-    {0xDD, 1},
+    {0xDD, 1, 64, "fisttp",     MEM,    0,      OP_LL},
     {0xDD, 2, 64, "fst",        MEM,    0,      OP_L},
     {0xDD, 3, 64, "fstp",       MEM,    0,      OP_L},
     {0xDD, 4,  0, "frstor",     MEM},   /* 94/108 */
@@ -877,7 +877,7 @@ static const struct op instructions_fpu_m[64] = {
     {0xDE, 6, 16, "fidiv",      MEM,    0,      OP_S},
     {0xDE, 7, 16, "fidivr",     MEM,    0,      OP_S},
     {0xDF, 0, 16, "fild",       MEM,    0,      OP_S},
-    {0xDF, 1},
+    {0xDF, 1, 16, "fisttp",     MEM,    0,      OP_S},
     {0xDF, 2, 16, "fist",       MEM,    0,      OP_S},
     {0xDF, 3, 16, "fistp",      MEM,    0,      OP_S},
     {0xDF, 4,  0, "fbld",       MEM},   /* 80 */
@@ -903,21 +903,21 @@ static const struct op instructions_fpu_r[64] = {
     {0xD9, 5,  0, {0},          0,      0},     /* fldXXX */
     {0xD9, 6,  0, {0},          0,      0},     /* f2xm1, fyl2x, ... */
     {0xD9, 7,  0, {0},          0,      0},     /* fprem, fyl2xp1, ... */
-    {0xDA, 0,  0, {0},          0,      0},
-    {0xDA, 1,  0, {0},          0,      0},
-    {0xDA, 2,  0, {0},          0,      0},
-    {0xDA, 3,  0, {0},          0,      0},
+    {0xDA, 0,  0, "fcmovb",     ST,     STX},
+    {0xDA, 1,  0, "fcmove",     ST,     STX},
+    {0xDA, 2,  0, "fcmovbe",    ST,     STX},
+    {0xDA, 3,  0, "fcmovu",     ST,     STX},
     {0xDA, 4,  0, {0},          0,      0},
     {0xDA, 5,  0, {0},          0,      0},     /* fucompp */
     {0xDA, 6,  0, {0},          0,      0},
     {0xDA, 7,  0, {0},          0,      0},
-    {0xDB, 0,  0, {0},          0,      0},
-    {0xDB, 1,  0, {0},          0,      0},
-    {0xDB, 2,  0, {0},          0,      0},
-    {0xDB, 3,  0, {0},          0,      0},
+    {0xDB, 0,  0, "fcmovnb",    ST,     STX},
+    {0xDB, 1,  0, "fcmovne",    ST,     STX},
+    {0xDB, 2,  0, "fcmovnbe",   ST,     STX},
+    {0xDB, 3,  0, "fcmovnu",    ST,     STX},
     {0xDB, 4,  0, {0},          0,      0},     /* fneni, fndisi, fnclex, fninit, fnsetpm */
-    {0xDB, 5,  0, {0},          0,      0},
-    {0xDB, 6,  0, {0},          0,      0},
+    {0xDB, 5,  0, "fucomi",     ST,     STX},
+    {0xDB, 6,  0, "fcomi",      ST,     STX},
     {0xDB, 7,  0, {0},          0,      0},
     {0xDC, 0,  0, "fadd",       STX,    ST},
     {0xDC, 1,  0, "fmul",       STX,    ST},
@@ -948,8 +948,8 @@ static const struct op instructions_fpu_r[64] = {
     {0xDF, 2,  0, "fstp",       STX,    0},     /* alias */
     {0xDF, 3,  0, "fstp",       STX,    0},     /* alias */
     {0xDF, 4,  0, {0},          0,      0},     /* fnstsw */
-    {0xDF, 5,  0, {0},          0,      0},
-    {0xDF, 6,  0, {0},          0,      0},
+    {0xDF, 5,  0, "fucomip",    ST,     STX},
+    {0xDF, 6,  0, "fcomip",     ST,     STX},
     {0xDF, 7,  0, {0},          0,      0},
 };
 
