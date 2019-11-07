@@ -124,7 +124,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
 }
 
 /* Returns the number of bytes processed (same as get_instr). */
-static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out, const struct ne *ne) {
+static int print_ne_instr(const struct segment *seg, word ip, byte *p, const struct ne *ne) {
     word cs = seg->cs;
     struct instr instr = {0};
     unsigned len;
@@ -132,8 +132,6 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
 
     const char *comment = NULL;
     char ip_string[10];
-
-    out[0] = 0;
 
     len = get_instr(ip, p, &instr, bits);
 
@@ -152,7 +150,7 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, char *out
     if (!comment && instr.op.arg0 == REL16)
         comment = get_entry_name(cs, instr.args[0].value, ne);
 
-    print_instr(out, ip_string, p, len, seg->instr_flags[ip], &instr, comment, bits);
+    print_instr(ip_string, p, len, seg->instr_flags[ip], &instr, comment, bits);
 
     return len;
 };
@@ -162,7 +160,6 @@ static void print_disassembly(const struct segment *seg, const struct ne *ne) {
     word ip = 0;
 
     byte buffer[MAX_INSTR];
-    char out[256];
 
     while (ip < seg->length) {
         fseek(f, seg->start+ip, SEEK_SET);
@@ -199,8 +196,7 @@ static void print_disassembly(const struct segment *seg, const struct ne *ne) {
              * because of "push cs", and they should be evident anyway. */
         }
 
-        ip += print_ne_instr(seg, ip, buffer, out, ne);
-        printf("%s\n", out);
+        ip += print_ne_instr(seg, ip, buffer, ne);
     }
     putchar('\n');
 }

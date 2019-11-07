@@ -109,7 +109,7 @@ static char *relocate_arg(struct instr *instr, struct arg *arg, const struct pe 
     return NULL;
 }
 
-static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *out, const struct pe *pe) {
+static int print_pe_instr(const struct section *sec, dword ip, byte *p, const struct pe *pe) {
     struct instr instr = {0};
     unsigned len;
     char *comment = NULL;
@@ -190,7 +190,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, char *ou
         instr.args[0].value += pe->imagebase;
     }
 
-    print_instr(out, ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment, bits);
+    print_instr(ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment, bits);
 
     return len;
 }
@@ -200,7 +200,6 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
     qword absip;
 
     byte buffer[MAX_INSTR];
-    char out[256];
 
     while (relip < sec->length && relip < sec->min_alloc) {
         fseek(f, sec->offset + relip, SEEK_SET);
@@ -240,8 +239,7 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
             printf("%lx <%s>:\n", absip, name ? name : "no name");
         }
 
-        relip += print_pe_instr(sec, ip, buffer, out, pe);
-        printf("%s\n", out);
+        relip += print_pe_instr(sec, ip, buffer, pe);
     }
     putchar('\n');
 }

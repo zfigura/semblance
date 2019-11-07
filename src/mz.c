@@ -46,19 +46,17 @@ static void print_header(struct header_mz *header) {
 #define warn_at(...)
 #endif
 
-static int print_mz_instr(dword ip, byte *p, char *out, const byte *flags) {
+static int print_mz_instr(dword ip, byte *p, const byte *flags) {
     struct instr instr = {0};
     unsigned len;
 
     char ip_string[7];
 
-    out[0] = 0;
-
     len = get_instr(ip, p, &instr, 16);
 
     sprintf(ip_string, "%05x", ip);
 
-    print_instr(out, ip_string, p, len, flags[ip], &instr, NULL, 16);
+    print_instr(ip_string, p, len, flags[ip], &instr, NULL, 16);
 
     return len;
 }
@@ -66,7 +64,6 @@ static int print_mz_instr(dword ip, byte *p, char *out, const byte *flags) {
 static void print_code(struct mz *mz) {
     dword ip = 0;
     byte buffer[MAX_INSTR];
-    char out[256];
 
     putchar('\n');
     printf("Code (start = 0x%x, length = 0x%x):\n", mz->start, mz->length);
@@ -104,8 +101,7 @@ static void print_code(struct mz *mz) {
             printf("%05x <no name>:\n", ip);
         }
 
-        ip += print_mz_instr(ip, buffer, out, mz->flags);
-        printf("%s\n", out);
+        ip += print_mz_instr(ip, buffer, mz->flags);
     }
 }
 

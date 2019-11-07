@@ -2434,7 +2434,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
     return len;
 }
 
-void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment, int bits) {
+void print_instr(char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment, int bits) {
     int i;
 
     /* FIXME: now that we've had to add bits to this function, get rid of ip_string */
@@ -2457,116 +2457,112 @@ void print_instr(char *out, char *ip, byte *p, int len, byte flags, struct instr
 
     /* check that the instruction exists */
     if (instr->op.name[0] == '?')
-        warn_at("Unknown opcode %2X (extension %d)\n", instr->op.opcode, instr->op.subcode);
+        warn_at("Unknown opcode 0x%02x (extension %d)\n", instr->op.opcode, instr->op.subcode);
 
     /* okay, now we begin dumping */
     if ((flags & INSTR_JUMP) && (opts & COMPILABLE)) {
         /* output a label, which is like an address but without the segment prefix */
         /* FIXME: check masm */
         if (asm_syntax == NASM)
-            out += sprintf(out, ".");
-        out += sprintf(out, "%s:", ip);
+            printf(".");
+        printf("%s:", ip);
     }
 
     if (!(opts & NO_SHOW_ADDRESSES))
-        out += sprintf(out, "%s:", ip);
-    out += sprintf(out, "\t");
+        printf("%s:", ip);
+    printf("\t");
 
-    if (!(opts & NO_SHOW_RAW_INSN))
-        {
-        for (i=0; i<len && i<7; i++) {
-            out += sprintf(out, "%02x ", p[i]);
-        }
-        for (; i<8; i++) {
-            out += sprintf(out, "   ");
-        }
+    if (!(opts & NO_SHOW_RAW_INSN)) {
+        for (i=0; i<len && i<7; i++)
+            printf("%02x ", p[i]);
+        for (; i<8; i++)
+            printf("   ");
     }
 
     /* mark instructions that are jumped to */
-    if ((flags & INSTR_JUMP) && !(opts & COMPILABLE)) {
-        out[-1] = '>';
-        if (flags & INSTR_FAR) {
-            out[-2] = '>';
-        }
-    }
+    if ((flags & INSTR_JUMP) && !(opts & COMPILABLE))
+        printf((flags & INSTR_FAR) ? ">>" : " >");
+    else
+        printf("  ");
 
     /* print prefixes, including (fake) prefixes if ours are invalid */
     if (instr->prefix & PREFIX_SEG_MASK) {
         /* note: is it valid to use overrides with lods and outs? */
         if (!instr->usedmem || (instr->op.arg0 == ESDI || (instr->op.arg1 == ESDI && instr->op.arg0 != DSSI))) {  /* can't be overridden */
             warn_at("Segment prefix %s used with opcode 0x%02x %s\n", seg16[(instr->prefix & PREFIX_SEG_MASK)-1], instr->op.opcode, instr->op.name);
-            out += sprintf(out, "%s ", seg16[(instr->prefix & PREFIX_SEG_MASK)-1]);
+            printf("%s ", seg16[(instr->prefix & PREFIX_SEG_MASK)-1]);
         }
     }
     if ((instr->prefix & PREFIX_OP32) && instr->op.size != 16 && instr->op.size != 32) {
-        warn_at("Operand-size override used with opcode %2X %s\n", instr->op.opcode, instr->op.name);
-        out += sprintf(out, (asm_syntax == GAS) ? "data32 " : "o32 "); /* fixme: how should MASM print it? */
+        warn_at("Operand-size override used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
+        printf((asm_syntax == GAS) ? "data32 " : "o32 "); /* fixme: how should MASM print it? */
     }
     if ((instr->prefix & PREFIX_ADDR32) && (asm_syntax == NASM) && (instr->op.flags & OP_STRING)) {
-        out += sprintf(out, "a32 ");
+        printf("a32 ");
     } else if ((instr->prefix & PREFIX_ADDR32) && !instr->usedmem && instr->op.opcode != 0xE3) { /* jecxz */
         warn_at("Address-size prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
-        out += sprintf(out, (asm_syntax == GAS) ? "addr32 " : "a32 "); /* fixme: how should MASM print it? */
+        printf((asm_syntax == GAS) ? "addr32 " : "a32 "); /* fixme: how should MASM print it? */
     }
     if (instr->prefix & PREFIX_LOCK) {
         if(!(instr->op.flags & OP_LOCK))
             warn_at("lock prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
-        out += sprintf(out, "lock ");
+        printf("lock ");
     }
     if (instr->prefix & PREFIX_REPNE) {
         if(!(instr->op.flags & OP_REPNE))
             warn_at("repne prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
-        out += sprintf(out, "repne ");
+        printf("repne ");
     }
     if (instr->prefix & PREFIX_REPE) {
         if(!(instr->op.flags & OP_REPE))
             warn_at("repe prefix used with opcode 0x%02x %s\n", instr->op.opcode, instr->op.name);
-        out += sprintf(out, (instr->op.flags & OP_REPNE) ? "repe ": "rep ");
+        printf((instr->op.flags & OP_REPNE) ? "repe ": "rep ");
     }
     if (instr->prefix & PREFIX_WAIT) {
-        out += sprintf(out, "wait ");
+        printf("wait ");
     }
 
     if (instr->vex)
-        out += sprintf(out, "v");
-    out += sprintf(out, "%s", instr->op.name);
+        printf("v");
+    printf("%s", instr->op.name);
 
     if (instr->args[0].string[0] || instr->args[1].string[0])
-        out += sprintf(out,"\t");
+        printf("\t");
 
     if (asm_syntax == GAS) {
         /* fixme: are all of these orderings correct? */
         if (instr->args[1].string[0])
-            out += sprintf(out, "%s,", instr->args[1].string);
+            printf("%s,", instr->args[1].string);
         if (instr->vex_reg)
-            out += sprintf(out, "%%ymm%d, ", instr->vex_reg);
+            printf("%%ymm%d, ", instr->vex_reg);
         if (instr->args[0].string[0])
-            out += sprintf(out, "%s", instr->args[0].string);
+            printf("%s", instr->args[0].string);
         if (instr->args[2].string[0])
-            out += sprintf(out, ",%s", instr->args[2].string);
+            printf(",%s", instr->args[2].string);
     } else {
         if (instr->args[0].string[0])
-            out += sprintf(out, "%s", instr->args[0].string);
+            printf("%s", instr->args[0].string);
         if (instr->args[1].string[0])
-            out += sprintf(out, ", ");
+            printf(", ");
         if (instr->vex_reg)
-            out += sprintf(out, "ymm%d, ", instr->vex_reg);
+            printf("ymm%d, ", instr->vex_reg);
         if (instr->args[1].string[0])
-            out += sprintf(out, "%s", instr->args[1].string);
+            printf("%s", instr->args[1].string);
         if (instr->args[2].string[0])
-            out += sprintf(out, ", %s", instr->args[2].string);
+            printf(", %s", instr->args[2].string);
     }
     if (comment) {
-        out += sprintf(out, asm_syntax == GAS ? "\t// " : "\t;");
-        out += sprintf(out, " <%s>", comment);
+        printf(asm_syntax == GAS ? "\t// " : "\t;");
+        printf(" <%s>", comment);
     }
 
     /* if we have more than 7 bytes on this line, wrap around */
     if (len > 7 && !(opts & NO_SHOW_RAW_INSN)) {
-        out += sprintf(out, "\n\t\t");
+        printf("\n\t\t");
         for (i=7; i<len; i++) {
-            out += sprintf(out, "%02x ", p[i]);
+            printf("%02x", p[i]);
+            if (i < len) printf(" ");
         }
-        *--out = 0; /* trailing space */
     }
+    printf("\n");
 }
