@@ -7,7 +7,10 @@
  * use the actual value. */
 static inline dword realaddr(word segment, word offset)
 {
-    return (segment * 0x10) + offset;
+    if (segment < 0xfff0u)
+        return (segment * 0x10) + offset;
+    else                /* relative segments >= 0xfff0 really point into PSP */
+        return (segment * 0x10) + offset - 0x100000;
 }
 
 #pragma pack(1)
