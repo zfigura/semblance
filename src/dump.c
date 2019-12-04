@@ -1,7 +1,7 @@
 /*
  * Entry point of the "dump" program
  *
- * Copyright 2017-2018 Zebediah Figura
+ * Copyright 2017-2019 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -20,6 +20,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
 
@@ -62,7 +63,7 @@ static const char help_message[] =
 "dump: tool to disassemble and print information from executable files.\n"
 "Usage: dump [options] <file(s)>\n"
 "Available options:\n"
-"\t-a, --resource                       Print embedded resources.\n"
+"\t-a, --resource[=filter]              Print embedded resources.\n"
 "\t-c, --compilable                     Produce output that can be compiled.\n"
 "\t-C, --demangle                       Demangle C++ function names.\n"
 "\t-d, --disassemble                    Print disassembled machine code.\n"
@@ -82,7 +83,7 @@ static const char help_message[] =
 "\t-x, --all-headers                    Print all headers.\n"
 "\t--no-show-addresses                  Don't print instruction addresses.\n"
 "\t--no-show-raw-insn                   Don't print raw instruction hex code.\n"
-"\t--pe-rel-addr=[...]                  Use relative addresses for PE files.\n"
+"\t--pe-rel-addr=[y/n]                  Use relative addresses for PE files.\n"
 ;
 
 static const struct option long_options[] = {
@@ -131,32 +132,10 @@ int main(int argc, char *argv[]){
             unsigned i;
             mode |= DUMPRSRC;
             if (optarg){
-                if (resource_count == MAXARGS){
-                    fprintf(stderr, "Too many resources specified\n");
-                    return 1;
-                }
-                if (0 >= (ret = sscanf(optarg, "%s %hu", type, &resource_id[resource_count])))
-                    /* empty argument, so do nothing */
-                    break;
-                if (ret == 1)
-                    resource_id[resource_count] = 0;
-
-                /* todo(?): let the user specify string [exe-defined] types, and also
-                 * string id names */
-                if (!sscanf(type, "%hu", &resource_type[resource_count])){
-                    resource_type[resource_count] = 0;
-                    for (i=1;i<rsrc_types_count;i++){
-                        if(rsrc_types[i] && !strcasecmp(rsrc_types[i], type)){
-                            resource_type[resource_count] = 0x8000|i;
-                            break;
-                        }
-                    }
-                    if(!resource_type[resource_count]){
-                        fprintf(stderr, "Unrecognized resource type '%s'\n", type);
-                        return 1;
-                    }
-                }
-                resource_count++;
+                const char *p = optarg;
+                while (*p == ' ' || *p == '=') ++p;
+                resource_filters = realloc(resource_filters, (resource_filters_count + 1) * sizeof(*resource_filters));
+                resource_filters[resource_filters_count++] = strdup(p);
             }
             break;
         }

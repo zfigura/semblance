@@ -1,7 +1,7 @@
 /*
  * Function(s) for dumping resources from NE files
  *
- * Copyright 2017-2018 Zebediah Figura
+ * Copyright 2017-2019 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -45,14 +45,17 @@ struct header_bitmap_info {
 
 STATIC_ASSERT(sizeof(struct header_bitmap_info) == 0x28);
 
-static void print_string_resource(long ptr){
+static char *dup_string_resource(long ptr){
     char length;
+    char *ret;
+    long cursor = ftell(f);
     fseek(f, ptr, SEEK_SET);
-    putchar('"');
     length = read_byte();
-    while (length--)
-        putchar(read_byte());
-    putchar('"');
+    ret = malloc(length + 1);
+    fread(ret, sizeof(char), length, f);
+    ret[length] = 0;
+    fseek(f, cursor, SEEK_SET);
+    return ret;
 }
 
 /* length-indexed */
@@ -1020,12 +1023,29 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
 }
 
 /* return true if this was one of the resources that was asked for */
-static int filter_resource(word type_id, word rn_id){
-    int i;
-    rn_id = rn_id & (~0x8000);
-    for (i=0; i<resource_count; i++){
-        if ((resource_type[i] == type_id) &&
-            (!resource_id[i] || resource_id[i] == rn_id))
+static int filter_resource(const char *type, const char *id){
+    unsigned i;
+
+    if (!resource_filters_count)
+        return 1;
+
+    for (i = 0; i < resource_filters_count; ++i){
+        const char *filter_type = resource_filters[i], *p;
+        size_t len = strlen(type);
+
+        /* note that both resource types and IDs are case insensitive */
+
+        /* if the filter is just a resource type or ID and we match that */
+        if (!strcasecmp(type, filter_type) || !strcasecmp(id, filter_type))
+            return 1;
+
+        /* if the filter is a resource type followed by an ID and we match both */
+        if (strncasecmp(type, filter_type, len) || filter_type[len] != ' ')
+            continue;
+
+        p = filter_type + len;
+        while (*p == ' ') ++p;
+        if (!strcasecmp(id, p))
             return 1;
     }
     return 0;
@@ -1042,10 +1062,6 @@ struct resource {
 
 STATIC_ASSERT(sizeof(struct resource) == 0xc);
 
-word resource_type[MAXARGS] = {0};
-word resource_id[MAXARGS] = {0};
-word resource_count = 0;
-
 void print_rsrc(long start){
     word align = read_word();
     word type_id;
@@ -1053,6 +1069,7 @@ void print_rsrc(long start){
     dword resloader; /* fixme: what is this? */
     struct resource rn;
     long cursor;
+    char *idstr;
 
     while ((type_id = read_word())){
         count = read_word();
@@ -1063,34 +1080,47 @@ void print_rsrc(long start){
             fread(&rn, sizeof(rn), 1, f);
             cursor = ftell(f);
 
-            /* if a specific type (and id) was requested, filter for it */
-            if (resource_count && !filter_resource(type_id, rn.id))
-                continue;
-
-            putchar('\n');
-
-            /* print resource type */
-            if (type_id & 0x8000){
-                if ((type_id & (~0x8000)) < rsrc_types_count && rsrc_types[type_id & (~0x8000)])
-                    printf("%s",rsrc_types[type_id & (~0x8000)]);
-                else
-                    printf("0x%04x", type_id);
+            if (rn.id & 0x8000){
+                idstr = malloc(6);
+                sprintf(idstr, "%d", rn.id & ~0x8000);
             } else
-                print_string_resource(start+type_id);
+                idstr = dup_string_resource(start + rn.id);
 
-            putchar(' ');
-            
-            /* print resource id */
-            if (rn.id & 0x8000)
-                printf("%d", rn.id & (~0x8000));
+            if (type_id & 0x8000)
+            {
+                if ((type_id & (~0x8000)) < rsrc_types_count && rsrc_types[type_id & (~0x8000)]){
+                    if (!filter_resource(rsrc_types[type_id & ~0x8000], idstr))
+                        goto next;
+                    printf("\n%s", rsrc_types[type_id & ~0x8000]);
+                } else {
+                    char typestr[7];
+                    sprintf(typestr, "0x%04x", type_id);
+                    if (!filter_resource(typestr, idstr))
+                        goto next;
+                    printf("\n%s", typestr);
+                }
+            }
             else
-                print_string_resource(start+rn.id);
+            {
+                char *typestr = dup_string_resource(start + type_id);
+                if (!filter_resource(typestr, idstr))
+                {
+                    free(typestr);
+                    goto next;
+                }
+                printf("\n\"%s\"", typestr);
+                free(typestr);
+            }
 
+            printf(" %s", idstr);
             printf(" (offset = 0x%x, length = %d [0x%x]", rn.offset << align, rn.length << align, rn.length << align);
             print_rsrc_flags(rn.flags);
             printf("):\n");
 
             print_rsrc_resource(type_id, rn.offset << align, rn.length << align, rn.id);
+
+next:
+            free(idstr);
             fseek(f, cursor, SEEK_SET);
         }
     }

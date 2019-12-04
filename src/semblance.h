@@ -68,8 +68,6 @@ word mode; /* what to dump */
 #define FULL_CONTENTS       0x20
 word opts; /* additional options */
 
-#define MAXARGS		256
-
 enum {
     GAS,
     NASM,
@@ -79,9 +77,8 @@ enum {
 extern const char *const rsrc_types[];
 extern const size_t rsrc_types_count;
 
-extern word resource_type[MAXARGS];
-extern word resource_id[MAXARGS];
-extern word resource_count;
+char **resource_filters;
+unsigned resource_filters_count;
 
 /* Whether to print addresses relative to the image base for PE files. */
 extern int pe_rel_addr;
