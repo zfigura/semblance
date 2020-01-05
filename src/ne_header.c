@@ -1,7 +1,7 @@
 /*
  * Functions for parsing the NE header
  *
- * Copyright 2017-2018 Zebediah Figura
+ * Copyright 2017-2018,2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -215,7 +215,7 @@ static const char *int_types[] = {
 };
 
 /* Returns the number of characters processed. */
-static int demangle_type(char *buffer, char *type) {
+static int demangle_type(char **known_names, char *buffer, char *type) {
     if (*type >= 'C' && *type <= 'K') {
         strcat(buffer, int_types[*type-'C']);
         strcat(buffer, " ");
@@ -231,7 +231,7 @@ static int demangle_type(char *buffer, char *type) {
             strcat(buffer, "const ");
         if ((type[1]-'A') & 2)
             strcat(buffer, "volatile ");
-        ret = demangle_type(buffer, type+2);
+        ret = demangle_type(known_names, buffer, type+2);
         if (!((type[1]-'A') & 4))
             strcat(buffer, "near ");
         strcat(buffer, (*type == 'A') ? "&" : "*");
@@ -242,17 +242,33 @@ static int demangle_type(char *buffer, char *type) {
     case 'U':
     case 'V':
     {
+        const char *p = buffer, *end;
+        unsigned int i;
+
+        if (type[1] >= '0' && type[1] <= '9')
+        {
+            strcat(buffer, known_names[type[1] - '0']);
+            strcat(buffer, " ");
+            return 3;
+        }
+
         /* These represent structs (U) or types (V), but the name given
          * doesn't seem to need a qualifier. */
-        char *end = strstr(type, "@@");
-        if (!end) {
-            /* something can go between the at signs, but what does it mean? */
-            end = strchr(type, '@')+1;
-            end = strchr(type, '@');
+        /* something can go between the at signs, but what does it mean? */
+        end = strchr(strchr(type, '@')+1, '@');
+        if (end[-1] == '@')
+            strncat(buffer, type+1, (end-1)-(type+1));
+        else
+            strncat(buffer, type+1, end-(type+1));
+
+        for (i = 0; i < 10; ++i) {
+            if (!known_names[i]) {
+                known_names[i] = strdup(p);
+                break;
+            }
         }
-        strncat(buffer, type+1, end-(type+1));
         strcat(buffer, " ");
-        return end-type;
+        return (end+1)-type;
     }
     case 'X': strcat(buffer, "void "); return 1;
     default: return 0;
@@ -263,10 +279,22 @@ static int demangle_type(char *buffer, char *type) {
  * than any documented, but I was able to find documentation that is at
  * least close in Agner Fog's manual. */
 static char *demangle(char *func) {
+    char *known_types[10] = {}, *known_names[10] = {};
+    unsigned int known_type_idx = 0, known_name_idx = 0;
     char buffer[1024];
     char *p, *start, *end;
     char prot = 0;
     int len;
+
+    if (func[1] == '?')
+    {
+        /* TODO: constructor/destructor */
+        return func;
+    }
+
+    /* First populate the known names up to the function name. */
+    for (p = func; *p != '@' && known_name_idx < 10; p = strchr(p, '@') + 1)
+        known_names[known_name_idx++] = strndup(p, strchr(p, '@') - p);
 
     /* Figure out the modifiers and calling convention. */
     buffer[0] = 0;
@@ -292,7 +320,7 @@ static char *demangle(char *func) {
 
     /* This marks the return value. */
     p++;
-    len = demangle_type(buffer, p);
+    len = demangle_type(known_names, buffer, p);
     if (!len) {
         warn("Unknown return type %c for function %s\n", *p, func);
         len = 1;
@@ -317,14 +345,22 @@ static char *demangle(char *func) {
     } else {
         strcat(buffer, "(");
         while (*p != '@') {
-            len = demangle_type(buffer, p);
-            if (!len) {
-                warn("Unknown argument type %c for function %s\n", *p, func);
-                len = 1;
+            if (*p >= '0' && *p <= '9') {
+                strcat(buffer, known_types[*p - '0']);
+                p++;
+            } else {
+                const char *type = buffer + strlen(buffer);
+                len = demangle_type(known_names, buffer, p);
+                if (buffer[strlen(buffer)-1] == ' ')
+                    buffer[strlen(buffer)-1] = 0;
+                if (len > 1 && known_type_idx < 10)
+                    known_types[known_type_idx++] = strdup(type);
+                else if (!len) {
+                    warn("Unknown argument type %c for function %s\n", *p, func);
+                    len = 1;
+                }
+                p += len;
             }
-            if (buffer[strlen(buffer)-1] == ' ')
-                buffer[strlen(buffer)-1] = 0;
-            p += len;
             strcat(buffer, ", ");
         }
         buffer[strlen(buffer)-2] = ')';
@@ -333,6 +369,11 @@ static char *demangle(char *func) {
 
     func = realloc(func, (strlen(buffer)+1)*sizeof(char));
     strcpy(func, buffer);
+
+    while (known_type_idx)
+        free(known_types[--known_type_idx]);
+    while (known_name_idx)
+        free(known_names[--known_name_idx]);
     return func;
 }
 
