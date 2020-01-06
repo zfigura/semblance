@@ -131,7 +131,7 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, const str
     int bits = (seg->flags & 0x2000) ? 32 : 16;
 
     const char *comment = NULL;
-    char ip_string[10];
+    char ip_string[11];
 
     len = get_instr(ip, p, &instr, bits);
 
