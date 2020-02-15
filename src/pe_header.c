@@ -338,11 +338,9 @@ static void get_import_module_table(struct pe *pe) {
 
     for (i = 0; i < pe->import_count; i++) {
 
-        fseek(f, 3 * sizeof(dword), SEEK_CUR);
-        pe->imports[i].module = fstrdup(addr2offset(read_dword(), pe));
-        pe->imports[i].nametab_addr = read_dword();
-
-        /* grab the imports themselves */
+        fread(entry, sizeof(dword), 5, f);
+        pe->imports[i].module = fstrdup(addr2offset(entry[3], pe));
+        pe->imports[i].nametab_addr = entry[0];
         get_import_name_table(&pe->imports[i], pe);
     }
 }
