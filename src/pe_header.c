@@ -20,6 +20,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -239,7 +240,8 @@ static char *fstrdup(long offset) {
 static void get_export_table(struct pe *pe) {
     struct export_header header;
     long offset = addr2offset(pe->dirs[0].address, pe);
-    int i;
+    int i, j;
+    dword address;
 
     /* More headers. It's like a PE file is nothing but headers.
      * Do we really need to print any of this? No, not really. Just use the data. */
@@ -249,18 +251,34 @@ static void get_export_table(struct pe *pe) {
     /* Grab the name. */
     pe->name = fstrdup(addr2offset(header.module_name_addr, pe));
 
+    /* If a DLL exports by ordinal and there are holes, they will have a 0
+     * address. We don't really want to put them in our table in that case, so
+     * run through it once to see how many exports there really are. */
+    pe->export_count = 0;
+    fseek(f, addr2offset(header.addr_table_addr, pe), SEEK_SET);
+    for (i=0; i<header.addr_table_count; i++) {
+        if (read_dword())
+            pe->export_count++;
+    }
+
     /* Grab the exports. */
-    pe->exports = malloc(header.addr_table_count * sizeof(struct export));
+    pe->exports = malloc(pe->export_count * sizeof(struct export));
 
     /* If addr_table_count exceeds export_count, this means that some exports
      * are nameless (and thus exported by ordinal). */
 
     fseek(f, addr2offset(header.addr_table_addr, pe), SEEK_SET);
+    j = 0;
     for (i=0; i<header.addr_table_count; i++) {
-        pe->exports[i].ordinal = i + header.ordinal_base;
-        pe->exports[i].address = read_dword();
-        pe->exports[i].name = NULL;
+        if ((address = read_dword()))
+        {
+            pe->exports[j].ordinal = i + header.ordinal_base;
+            pe->exports[j].address = address;
+            pe->exports[j].name = NULL;
+            j++;
+        }
     }
+    assert(j == pe->export_count);
 
     /* Why? WHY? */
     for (i=0; i<header.export_count; i++) {
@@ -271,8 +289,6 @@ static void get_export_table(struct pe *pe) {
         fseek(f, addr2offset(header.name_table_addr, pe) + (i * sizeof(dword)), SEEK_SET);
         pe->exports[index].name = fstrdup(addr2offset(read_dword(), pe));
     }
-
-    pe->export_count = header.addr_table_count;
 }
 
 static void get_import_name_table(struct import_module *module, struct pe *pe) {
