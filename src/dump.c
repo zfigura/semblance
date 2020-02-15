@@ -161,8 +161,7 @@ int main(int argc, char *argv[]){
             printf(help_message);
             return 0;
         case 'i': /* imports */
-            /* FIXME: should also list imported functions (?) */
-            mode |= DUMPIMPORTMOD;
+            mode |= DUMPIMPORT;
             break;
         case 'M': /* additional options */
             if (!strcmp(optarg, "att") || !strcmp(optarg, "gas"))
@@ -186,7 +185,7 @@ int main(int argc, char *argv[]){
             opts |= FULL_CONTENTS;
             break;
         case 'x': /* all headers */
-            mode |= DUMPHEADER | DUMPEXPORT | DUMPIMPORTMOD;
+            mode |= DUMPHEADER | DUMPEXPORT | DUMPIMPORT;
             break;
         case 0x80:
             if (optarg[0] == '1' || optarg[0] == 'y' || optarg[0] == 'Y')

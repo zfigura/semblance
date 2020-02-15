@@ -55,7 +55,7 @@ static inline void skip_padding(char bytes){
 #define DUMPHEADER      0x01
 #define DUMPRSRC        0x02
 #define DUMPEXPORT      0x04
-#define DUMPIMPORTMOD   0x08
+#define DUMPIMPORT      0x08
 #define DISASSEMBLE     0x10
 #define SPECFILE        0x80
 word mode; /* what to dump */

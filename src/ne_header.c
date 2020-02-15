@@ -23,7 +23,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <strings.h>
 #include <getopt.h>
 
 #include "semblance.h"
@@ -599,7 +598,7 @@ void dumpne(long offset_ne) {
         print_export(&ne);
     }
 
-    if (mode & DUMPIMPORTMOD) {
+    if (mode & DUMPIMPORT) {
         putchar('\n');
         printf("Imported modules:\n");
         for (i = 0; i < ne.header.ne_cmod; i++)

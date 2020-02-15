@@ -417,7 +417,7 @@ void freepe(struct pe *pe) {
 
 void dumppe(long offset_pe) {
     struct pe pe = {0};
-    int i;
+    int i, j;
 
     readpe(offset_pe, &pe);
 
@@ -475,12 +475,19 @@ void dumppe(long offset_pe) {
             printf("No export table\n");
     }
 
-    if (mode & DUMPIMPORTMOD) {
+    if (mode & DUMPIMPORT) {
         putchar('\n');
         if (pe.imports) {
             printf("Imported modules:\n");
             for (i = 0; i < pe.import_count; i++)
                 printf("\t%s\n", pe.imports[i].module);
+
+            printf("\nImported functions:\n");
+            for (i = 0; i < pe.import_count; i++) {
+                printf("\t%s:\n", pe.imports[i].module);
+                for (j = 0; j < pe.imports[i].count; j++)
+                    printf("\t\t%s\n", pe.imports[i].nametab[j]);
+            }
         } else
             printf("No imported module table\n");
     }
