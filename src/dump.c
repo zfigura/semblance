@@ -1,7 +1,7 @@
 /*
  * Entry point of the "dump" program
  *
- * Copyright 2017-2019 Zebediah Figura
+ * Copyright 2017-2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -20,30 +20,46 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <fcntl.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <string.h>
-#include <getopt.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "semblance.h"
 
 static void dump_file(char *file){
+    struct stat st;
     word magic;
     long offset = 0;
+    int fd;
 
-    f = fopen(file, "r");
-    if (!f) {
+    if ((fd = open(file, O_RDONLY)) < 0) {
         perror("Cannot open %s");
         return;
     }
 
-    magic = read_word();
+    if (fstat(fd, &st) < 0)
+    {
+        perror("Cannot stat %s");
+        return;
+    }
+
+    if ((map = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0)) == MAP_FAILED)
+    {
+        perror("Cannot map %s");
+        return;
+    }
+
+    magic = read_word(0);
 
     printf("File: %s\n", file);
     if (magic == 0x5a4d){ /* MZ */
-        fseek(f, 0x3c, SEEK_SET);
-        offset = read_dword();
-        fseek(f, offset, SEEK_SET);
-        magic = read_word();
+        offset = read_dword(0x3c);
+        magic = read_word(offset);
 
         if (magic == 0x4550)
             dumppe(offset);
@@ -54,8 +70,6 @@ static void dump_file(char *file){
     } else
         fprintf(stderr, "File format not recognized\n");
 
-    fclose(f);
-    fflush(stdout);
     return;
 }
 

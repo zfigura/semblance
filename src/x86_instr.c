@@ -2434,7 +2434,7 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
     return len;
 }
 
-void print_instr(char *ip, byte *p, int len, byte flags, struct instr *instr, const char *comment, int bits) {
+void print_instr(char *ip, const byte *p, int len, byte flags, struct instr *instr, const char *comment, int bits) {
     int i;
 
     /* FIXME: now that we've had to add bits to this function, get rid of ip_string */

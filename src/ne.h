@@ -93,7 +93,7 @@ struct ne {
     char *name;
     char *description;
 
-    byte *nametab;    /* FIXME */
+    const byte *nametab;    /* FIXME */
 
     struct entry *enttab;
     unsigned entcount;
@@ -107,9 +107,9 @@ extern void readne(long offset_ne, struct ne *ne);
 extern void freene(struct ne *ne);
 
 /* in ne_resource.c */
-extern void print_rsrc(long start);
+extern void print_rsrc(off_t start);
 /* in ne_segment.c */
-extern void read_segments(long start, struct ne *ne);
+extern void read_segments(off_t start, struct ne *ne);
 extern void free_segments(struct ne *ne);
 extern void print_segments(struct ne *ne);
 

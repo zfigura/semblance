@@ -1,7 +1,7 @@
 /*
  * MZ (DOS) files
  *
- * Copyright 2017-2018 Zebediah Figura
+ * Copyright 2017-2018,2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -29,7 +29,7 @@
 
 #pragma pack(1)
 
-static void print_header(struct header_mz *header) {
+static void print_header(const struct header_mz *header) {
     putchar('\n');
     printf("Minimum extra allocation: %d bytes\n", header->e_minalloc * 16); /* 0a */
     printf("Maximum extra allocation: %d bytes\n", header->e_maxalloc * 16); /* 0c */
@@ -46,7 +46,7 @@ static void print_header(struct header_mz *header) {
 #define warn_at(...)
 #endif
 
-static int print_mz_instr(dword ip, byte *p, const byte *flags) {
+static int print_mz_instr(dword ip, const byte *p, const byte *flags) {
     struct instr instr = {0};
     unsigned len;
 
@@ -69,16 +69,14 @@ static void print_code(struct mz *mz) {
     printf("Code (start = 0x%x, length = 0x%x):\n", mz->start, mz->length);
 
     while (ip < mz->length) {
-        fseek(f, mz->start + ip, SEEK_SET);
-
         /* find a valid instruction */
         if (!(mz->flags[ip] & INSTR_VALID)) {
             if (opts & DISASSEMBLE_ALL) {
                 /* still skip zeroes */
-                if (read_byte() == 0) {
+                if (read_byte(mz->start + ip) == 0) {
                     printf("      ...\n");
                     ip++;
-                    while (read_byte() == 0) ip++;
+                    while (read_byte(mz->start + ip) == 0) ip++;
                 }
             } else {
                 printf("     ...\n");
@@ -86,7 +84,6 @@ static void print_code(struct mz *mz) {
             }
         }
 
-        fseek(f, mz->start+ip, SEEK_SET);
         if (ip >= mz->length) return;
 
         /* fixme: disassemble everything for now; we'll try to fix it later.
@@ -94,7 +91,7 @@ static void print_code(struct mz *mz) {
          * unabashedly mix code and data, so we need to figure out a solution
          * for that. but we needed to do that anyway. */
 
-        fread(buffer, 1, min(sizeof(buffer), mz->length-ip), f);
+        memcpy(buffer, read_data(mz->start + ip), min(sizeof(buffer), mz->length - ip));
 
         if (mz->flags[ip] & INSTR_FUNC) {
             printf("\n");
@@ -124,9 +121,8 @@ static void scan_segment(dword ip, struct mz *mz) {
         if (mz->flags[ip] & INSTR_SCANNED) return;
 
         /* read the instruction */
-        fseek(f, mz->start+ip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));  // fixme
-        fread(buffer, 1, min(sizeof(buffer), mz->length-ip), f);
+        memcpy(buffer, read_data(mz->start + ip), min(sizeof(buffer), mz->length - ip));
         instr_length = get_instr(ip, buffer, &instr, 16);
 
         /* mark the bytes */
@@ -159,9 +155,9 @@ static void scan_segment(dword ip, struct mz *mz) {
 
 static void read_code(struct mz *mz) {
 
-    mz->entry_point = realaddr(mz->header.e_cs, mz->header.e_ip);
-    mz->length = ((mz->header.e_cp - 1) * 512) + mz->header.e_cblp;
-    if (mz->header.e_cblp == 0) mz->length += 512;
+    mz->entry_point = realaddr(mz->header->e_cs, mz->header->e_ip);
+    mz->length = ((mz->header->e_cp - 1) * 512) + mz->header->e_cblp;
+    if (mz->header->e_cblp == 0) mz->length += 512;
     mz->flags = calloc(mz->length, sizeof(byte));
 
     if (mz->entry_point > mz->length)
@@ -171,21 +167,17 @@ static void read_code(struct mz *mz) {
 }
 
 void readmz(struct mz *mz) {
-    fseek(f, 0, SEEK_SET);
-    fread(&mz->header, sizeof(struct header_mz), 1, f);
+    mz->header = read_data(0);
 
     /* read the relocation table */
-    mz->reltab = malloc(mz->header.e_crlc * sizeof(struct reloc));
-    fseek(f, mz->header.e_lfarlc, SEEK_SET);
-    fread(mz->reltab, sizeof(struct reloc), mz->header.e_crlc, f);
+    mz->reltab = read_data(mz->header->e_lfarlc);
 
     /* read the code */
-    mz->start = mz->header.e_cparhdr * 16;
+    mz->start = mz->header->e_cparhdr * 16;
     read_code(mz);
 }
 
 void freemz(struct mz *mz) {
-    free(mz->reltab);
     free(mz->flags);
 }
 
@@ -197,7 +189,7 @@ void dumpmz(void) {
     printf("Module type: MZ (DOS executable)\n");
 
     if (mode & DUMPHEADER)
-        print_header(&mz.header);
+        print_header(mz.header);
 
     if (mode & DISASSEMBLE)
         print_code(&mz);

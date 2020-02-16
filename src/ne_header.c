@@ -377,69 +377,77 @@ static char *demangle(char *func) {
 }
 
 /* return the first entry (module name/desc) */
-static char *read_res_name_table(long start, struct entry *entry_table){
+static char *read_res_name_table(off_t start, struct entry *entry_table)
+{
     /* reads (non)resident names into our entry table */
+    off_t cursor = start;
     byte length;
     char *first;
     char *name;
-    word ordinal;
 
-    fseek(f, start, SEEK_SET);
-
-    length = read_byte();
+    length = read_byte(cursor++);
     first = malloc((length+1)*sizeof(char));
-    fread(first, sizeof(char), length, f);
+    memcpy(first, read_data(cursor), length);
     first[length] = 0;
-    fseek(f, sizeof(word), SEEK_CUR);
+    cursor += length + 2;
 
-    while ((length = read_byte())){
+    while ((length = read_byte(cursor++)))
+    {
         name = malloc((length+1)*sizeof(char));
-        fread(name, sizeof(char), length, f);
-        name[length] = 0;   /* null term */
-        ordinal = read_word();
+        memcpy(name, read_data(cursor), length);
+        name[length] = 0;
+        cursor += length;
 
         if ((opts & DEMANGLE) && name[0] == '?')
             name = demangle(name);
 
-        entry_table[ordinal-1].name = name;
+        entry_table[read_word(cursor) - 1].name = name;
+        cursor += 2;
     }
 
     return first;
 }
 
-static void get_entry_table(long start, struct ne *ne) {
+static void get_entry_table(off_t start, struct ne *ne)
+{
     byte length, index;
     int count = 0;
+    off_t cursor;
     unsigned i;
     word w;
 
     /* get a count */
-    fseek(f, start, SEEK_SET);
-    while ((length = read_byte())) {
-        index = read_byte();
+    cursor = start;
+    while ((length = read_byte(cursor++)))
+    {
+        index = read_byte(cursor++);
         count += length;
         if (index != 0)
-            fseek(f, ((index == 0xff) ? 6 : 3) * length, SEEK_CUR);
+            cursor += (index == 0xff ? 6 : 3) * length;
     }
     ne->enttab = calloc(sizeof(struct entry), count);
 
-    fseek(f, start, SEEK_SET);
     count = 0;
-    while ((length = read_byte())) {
-        index = read_byte();
-        for (i = 0; i < length; i++) {
+    cursor = start;
+    while ((length = read_byte(cursor++)))
+    {
+        index = read_byte(cursor++);
+        for (i = 0; i < length; ++i)
+        {
             if (index == 0xff) {
-                ne->enttab[count].flags = read_byte();
-                if ((w = read_word()) != 0x3fcd)
+                ne->enttab[count].flags = read_byte(cursor);
+                if ((w = read_word(cursor + 1)) != 0x3fcd)
                     warn("Entry %d has interrupt bytes %02x %02x (expected 3f cd).\n", count+1, w & 0xff, w >> 16);
-                ne->enttab[count].segment = read_byte();
-                ne->enttab[count].offset = read_word();
+                ne->enttab[count].segment = read_byte(cursor + 3);
+                ne->enttab[count].offset = read_word(cursor + 4);
+                cursor += 6;
             } else if (index == 0x00) {
                 /* no entries, just here to skip ordinals */
             } else {
-                ne->enttab[count].flags = read_byte();
+                ne->enttab[count].flags = read_byte(cursor);
                 ne->enttab[count].segment = index;
-                ne->enttab[count].offset = read_word();
+                ne->enttab[count].offset = read_word(cursor + 1);
+                cursor += 3;
             }
             count++;
         }
@@ -507,15 +515,15 @@ static void load_exports(struct import_module *module) {
     fclose(specfile);
 }
 
-static void get_import_module_table(long start, struct ne *ne) {
+static void get_import_module_table(off_t start, struct ne *ne)
+{
     word offset;
     byte length;
     unsigned i;
 
-    fseek(f, start, SEEK_SET);
     ne->imptab = malloc(ne->header.ne_cmod * sizeof(struct import_module));
     for (i = 0; i < ne->header.ne_cmod; i++) {
-        offset = read_word();
+        offset = read_word(start + i * 2);
         length = ne->nametab[offset];
         ne->imptab[i].name = malloc((length+1)*sizeof(char));
         memcpy(ne->imptab[i].name, &ne->nametab[offset+1], length);
@@ -530,17 +538,14 @@ static void get_import_module_table(long start, struct ne *ne) {
     }
 }
 
-void readne(long offset_ne, struct ne *ne) {
-    fseek(f, offset_ne, SEEK_SET);
-    fread(&ne->header, sizeof(struct header_ne), 1, f);
+void readne(off_t offset_ne, struct ne *ne) {
+    memcpy(&ne->header, read_data(offset_ne), sizeof(ne->header));
 
     /* read our various tables */
     get_entry_table(offset_ne + ne->header.ne_enttab, ne);
     ne->name = read_res_name_table(offset_ne + ne->header.ne_restab, ne->enttab);
     ne->description = read_res_name_table(ne->header.ne_nrestab, ne->enttab);
-    fseek(f, offset_ne + ne->header.ne_imptab, SEEK_SET);
-    ne->nametab = malloc(ne->header.ne_enttab - ne->header.ne_imptab);
-    fread(ne->nametab, sizeof(byte), ne->header.ne_enttab - ne->header.ne_imptab, f);
+    ne->nametab = read_data(offset_ne + ne->header.ne_imptab);
     get_import_module_table(offset_ne + ne->header.ne_modtab, ne);
     read_segments(offset_ne + ne->header.ne_segtab, ne);
 }
@@ -548,7 +553,6 @@ void readne(long offset_ne, struct ne *ne) {
 void freene(struct ne *ne) {
     int i, j;
 
-    free(ne->nametab);
     free(ne->name);
     free(ne->description);
 
@@ -609,7 +613,6 @@ void dumpne(long offset_ne) {
         print_segments(&ne);
 
     if (mode & DUMPRSRC){
-        fseek(f, offset_ne + ne.header.ne_rsrctab, SEEK_SET);
         if (ne.header.ne_rsrctab != ne.header.ne_restab)
             print_rsrc(offset_ne + ne.header.ne_rsrctab);
         else

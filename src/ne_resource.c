@@ -1,7 +1,7 @@
 /*
  * Function(s) for dumping resources from NE files
  *
- * Copyright 2017-2019 Zebediah Figura
+ * Copyright 2017-2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -20,6 +20,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,24 +46,20 @@ struct header_bitmap_info {
 
 STATIC_ASSERT(sizeof(struct header_bitmap_info) == 0x28);
 
-static char *dup_string_resource(long ptr){
-    char length;
-    char *ret;
-    long cursor = ftell(f);
-    fseek(f, ptr, SEEK_SET);
-    length = read_byte();
-    ret = malloc(length + 1);
-    fread(ret, sizeof(char), length, f);
+static char *dup_string_resource(off_t offset)
+{
+    byte length = read_byte(offset);
+    char *ret = malloc(length + 1);
+    memcpy(ret, read_data(offset + 1), length);
     ret[length] = 0;
-    fseek(f, cursor, SEEK_SET);
     return ret;
 }
 
-/* length-indexed */
-static void print_escaped_string(long length){
+/* length-indexed; returns  */
+static void print_escaped_string(off_t offset, long length){
     putchar('"');
     while (length--){
-        char c = read_byte();
+        char c = read_byte(offset++);
         if (c == '\t')
             printf("\\t");
         else if (c == '\n')
@@ -81,11 +78,12 @@ static void print_escaped_string(long length){
     putchar('"');
 }
 
-/* null-terminated */
-static void print_escaped_string0(void){
+/* null-terminated; returns the end of the string */
+static off_t print_escaped_string0(off_t offset)
+{
     char c;
     putchar('"');
-    while ((c = read_byte())){
+    while ((c = read_byte(offset++))){
         if (c == '\t')
             printf("\\t");
         else if (c == '\n')
@@ -102,6 +100,7 @@ static void print_escaped_string0(void){
             printf("\\x%02hhx", c);
     }
     putchar('"');
+    return offset;
 }
 
 static void print_timestamp(dword high, dword low){
@@ -481,23 +480,26 @@ static const char *const rsrc_dialog_class[] = {
     0
 };
 
-static void print_rsrc_menu_items(int depth) {
+static off_t print_rsrc_menu_items(int depth, off_t offset)
+{
     word flags, id;
     char buffer[1024];
     int i;
 
     while (1) {
-        flags = read_word();
+        flags = read_word(offset);
+        offset += 2;
 
         printf("        ");
         for (i = 0; i < depth; i++) printf("  ");
         if (!(flags & 0x0010)) {
             /* item ID */
-            id = read_word();
+            id = read_word(offset);
+            offset += 2;
             printf("%d: ", id);
         }
 
-        print_escaped_string0();
+        offset = print_escaped_string0(offset);
 
         /* and print flags */
         buffer[0] = '\0';
@@ -518,11 +520,13 @@ static void print_rsrc_menu_items(int depth) {
 
         /* if we have a popup, recurse */
         if (flags & 0x0010)
-            print_rsrc_menu_items(depth+1);
+            offset = print_rsrc_menu_items(depth + 1, offset);
 
         if (flags & 0x0080)
             break;
     }
+
+    return offset;
 }
 
 /* This is actually two headers, with the first (VS_VERSIONINFO)
@@ -658,197 +662,199 @@ static void print_rsrc_version_flags(struct version_header header){
     }
 };
 
-static void print_rsrc_strings(long end){
+static void print_rsrc_strings(off_t offset, off_t end)
+{
     word length;
 
-    while (ftell(f) < end){
+    while (offset < end)
+    {
         /* first length is redundant */
-        fseek(f, sizeof(word), SEEK_CUR);
-        length = read_word();
+        length = read_word(offset + 2);
         printf("        ");
-        print_escaped_string0();
-        skip_padding(4);
+        offset = print_escaped_string0(offset + 4);
+        offset = (offset + 3) & ~3;
         printf(": ");
         /* According to MSDN this is zero-terminated, and in most cases it is.
          * However, at least one application (msbsolar) has NEs with what
          * appears to be a non-zero-terminated string. In Windows this is cut
          * off at one minus the given length, just like other strings, so
          * we'll do that here. */
-        print_escaped_string(length-1);
-        fseek(f, 1, SEEK_CUR); /* and skip the zero */
-        skip_padding(4);
+        print_escaped_string(offset, length - 1);
+        offset += length;
+        offset = (offset + 3) & ~3;
         putchar('\n');
     }
 };
 
-static void print_rsrc_stringfileinfo(long end){
-    long cursor;
+static void print_rsrc_stringfileinfo(off_t offset, off_t end)
+{
     word length;
     unsigned int lang = 0;
     unsigned int codepage = 0;
 
     /* we already processed the StringFileInfo header */
-    while ((cursor = ftell(f)) < end){
+    while (offset < end)
+    {
         /* StringTable header */
-        length = read_word();
-        fseek(f, sizeof(word), SEEK_CUR); /* ValueLength, always 0 */
+        length = read_word(offset);
 
         /* codepage and language code */
-        fscanf(f, "%4x%4x", &lang, &codepage);
+        sscanf(read_data(offset + 4), "%4x%4x", &lang, &codepage);
         printf("    String table (lang=%04x, codepage=%04x):\n", lang, codepage);
-        fseek(f, 4*sizeof(byte), SEEK_CUR); /* padding */
 
-        print_rsrc_strings(cursor + length);
+        print_rsrc_strings(offset + 16, offset + length);
+        offset += length;
     }
 };
 
-static void print_rsrc_varfileinfo(long end){
-    word length;
-    
-    while (ftell(f) < end){
-        /* first length is redundant */
-        length = read_word();
-        fseek(f, 12*sizeof(byte), SEEK_CUR); /* Translation\0 */
-        while (length -= 4)
-            printf("    Var (lang=%04x, codepage=%04x)\n", read_word(), read_word());
-    }
-};
-
-static void print_rsrc_resource(word type, long offset, long length, word rn_id){
-    fseek(f, offset, SEEK_SET);
-    
-    switch (type){
-    case 0x8001: /* Cursor */
+static void print_rsrc_varfileinfo(off_t offset, off_t end)
+{
+    while (offset < end)
     {
-        printf("    Hotspot: (%d, %d)\n", read_word(), read_word());
+        /* first length is redundant */
+        word length = read_word(offset + 2), i;
+        offset += 16;
+        for (i = 0; i < length; i += 4)
+            printf("    Var (lang=%04x, codepage=%04x)\n", read_word(offset + i), read_word(offset + i + 2));
+        offset += length;
     }
-    /* fall through */
+};
+
+static void print_rsrc_resource(word type, off_t offset, size_t length, word rn_id)
+{
+    switch (type)
+    {
+    case 0x8001: /* Cursor */
+        printf("    Hotspot: (%d, %d)\n", read_word(offset), read_word(offset + 2));
+        offset += 4;
+        /* fall through */
+
     case 0x8002: /* Bitmap */
     case 0x8003: /* Icon */
-    {
-        struct header_bitmap_info header = {0};
-        /* header size should be 40 (INFOHEADER) or 12 (COREHEADER). */
-        if ((header.biSize = read_dword()) == 12){
-            header.biWidth = read_word();
-            header.biHeight = read_word();
-            header.biPlanes = read_word();
-            header.biBitCount = read_word();
-        } else if (header.biSize == 40){
-            fseek(f, -sizeof(dword), SEEK_CUR);
-            fread(&header, sizeof(header), 1, f);
-        } else {
-            warn("Unknown bitmap header size %d.\n", header.biSize);
-            break;
+        if (read_dword(offset) == 12) /* BITMAPCOREHEADER */
+        {
+            printf("    Size: %dx%d\n", read_word(offset + 4), read_word(offset + 6));
+            printf("    Planes: %d\n", read_word(offset + 8));
+            printf("    Bit depth: %d\n", read_word(offset + 10));
         }
-
-        printf("    Size: %dx%dx%d\n", header.biWidth,
-               header.biHeight/2, header.biBitCount);
-        if (header.biPlanes != 1)
-            warn("Bitmap specifies %d color planes (expected 1).\n", header.biPlanes);
-        if (header.biCompression <= 13 && rsrc_bmp_compression[header.biCompression])
-            printf("    Compression: %s\n", rsrc_bmp_compression[header.biCompression]);
-        else
-            printf("    Compression: (unknown value %d)\n", header.biCompression);
-        if (header.biXPelsPerMeter || header.biYPelsPerMeter)
+        else if (read_dword(offset) == 40) /* BITMAPINFOHEADER */
+        {
+            const struct header_bitmap_info *header = read_data(offset);
+            printf("    Size: %dx%d\n", header->biWidth, header->biHeight / 2);
+            printf("    Planes: %d\n", header->biPlanes);
+            printf("    Bit depth: %d\n", header->biBitCount);
+            if (header->biCompression <= 13 && rsrc_bmp_compression[header->biCompression])
+                printf("    Compression: %s\n", rsrc_bmp_compression[header->biCompression]);
+            else
+                printf("    Compression: (unknown value %d)\n", header->biCompression);
             printf("    Resolution: %dx%d pixels/meter\n",
-                   header.biXPelsPerMeter, header.biYPelsPerMeter);
-        printf("    Colors used: %d", header.biClrUsed); /* todo: implied */
-        if (header.biClrImportant)
-            printf(" (%d marked important)", header.biClrImportant);
-        putchar('\n');
-    }
-    break;
+                    header->biXPelsPerMeter, header->biYPelsPerMeter);
+            printf("    Colors used: %d", header->biClrUsed); /* todo: implied */
+            if (header->biClrImportant)
+                printf(" (%d marked important)", header->biClrImportant);
+            putchar('\n');
+        }
+        else
+            warn("Unknown bitmap header size %d.\n", read_dword(offset));
+        break;
+
     case 0x8004: /* Menu */
     {
-        word extended = read_word();
-        word offset = read_word();
+        word extended = read_word(offset);
 
         if (extended > 1) {
             warn("Unknown menu version %d\n",extended);
             break;
         }
         printf(extended ? "    Type: extended\n" : "    Type: standard\n");
-        if (offset != extended*4)
-            warn("Unexpected offset value %d (expected %d)\n", offset, extended*4);
+        if (read_word(offset + 2) != extended*4)
+            warn("Unexpected offset value %d (expected %d).\n", read_word(offset + 2), extended * 4);
+        offset += 4;
+
         if (extended)
-            printf("    Help ID: %d\n", read_dword());
+        {
+            printf("    Help ID: %d\n", read_dword(offset));
+            offset += 4;
+        }
 
         printf("    Items:\n");
-        print_rsrc_menu_items(0);
+        print_rsrc_menu_items(0, offset);
+        break;
     }
-    break;
     case 0x8005: /* Dialog box */
     {
         byte count;
         word font_size;
-        dword style = read_dword();
+        dword style = read_dword(offset);
         print_rsrc_dialog_style(style);
-        count = read_byte();
-        printf("    Position: (%d, %d)\n", read_word(), read_word());
-        printf("    Size: %dx%d\n", read_word(), read_word());
-        if (read_byte() == 0xff){
-            printf("    Menu resource: #%d", read_word());
+        count = read_byte(offset + 4);
+        printf("    Position: (%d, %d)\n", read_word(offset + 5), read_word(offset + 7));
+        printf("    Size: %dx%d\n", read_word(offset + 9), read_word(offset + 11));
+        if (read_byte(offset + 13) == 0xff){
+            printf("    Menu resource: #%d", read_word(offset + 14));
         } else {
             printf("    Menu name: ");
-            fseek(f, -sizeof(byte), SEEK_CUR);
-            print_escaped_string0();
+            offset = print_escaped_string0(offset + 13);
         }
         printf("\n    Class name: ");
-        print_escaped_string0();
+        offset = print_escaped_string0(offset);
         printf("\n    Caption: ");
-        print_escaped_string0();
+        offset = print_escaped_string0(offset);
         if (style & 0x00000040){ /* DS_SETFONT */
-            font_size = read_word();
+            font_size = read_word(offset);
             printf("\n    Font: ");
-            print_escaped_string0();
+            offset = print_escaped_string0(offset + 2);
             printf(" (%d pt)", font_size);
         }
         putchar('\n');
 
         while (count--){
-            struct dialog_control control;
-            fread(&control, sizeof(control), 1, f);
+            const struct dialog_control *control = read_data(offset);
+            offset += sizeof(*control);
 
-            if (control.class & 0x80){
-                if (control.class <= 0x85)
-                    printf("    %s", rsrc_dialog_class[control.class & (~0x80)]);
+            if (control->class & 0x80){
+                if (control->class <= 0x85)
+                    printf("    %s", rsrc_dialog_class[control->class & (~0x80)]);
                 else
-                    printf("    (unknown class %d)", control.class);
-            } else {
-                fseek(f, -sizeof(byte), SEEK_CUR);
-                print_escaped_string0();
+                    printf("    (unknown class %d)", control->class);
             }
-            printf(" %d:\n", control.id);
+            else
+                offset = print_escaped_string0(offset);
+            printf(" %d:\n", control->id);
 
-            printf("        Position: (%d, %d)\n", control.x, control.y);
-            printf("        Size: %dx%d\n", control.width, control.height);
-            print_rsrc_control_style(control.class, control.style);
+            printf("        Position: (%d, %d)\n", control->x, control->y);
+            printf("        Size: %dx%d\n", control->width, control->height);
+            print_rsrc_control_style(control->class, control->style);
 
-            if (read_byte() == 0xff){
+            if (read_byte(offset) == 0xff){
                 /* todo: we can check the style for SS_ICON/SS_BITMAP and *maybe* also
                  * refer back to a printed RT_GROUPICON/GROUPCUROR/BITMAP resource. */
-                printf("        Resource: #%d", read_word());
+                printf("        Resource: #%d", read_word(offset));
+                offset += 3;
             } else {
-                fseek(f, -sizeof(byte), SEEK_CUR);
                 printf("        Text: ");
-                print_escaped_string0();
+                offset = print_escaped_string0(offset );
             }
             /* todo: WINE parses this as "data", but all of my testcases return 0. */
-            read_byte();
+            /* read_byte(); */
             putchar('\n');
         }
     }
     break;
     case 0x8006: /* String */
     {
+        off_t cursor = offset;
         int i = 0;
-        long cursor;
-        while ((cursor = ftell(f)) < offset+length){
-            byte length = read_byte();
-            if (length){
+
+        while (cursor < offset + length)
+        {
+            byte str_length = read_byte(cursor++);
+            if (str_length)
+            {
                 printf("    %3d (0x%06lx): ", i + ((rn_id & (~0x8000))-1)*16, cursor);
-                print_escaped_string(length);
+                print_escaped_string(cursor, str_length);
                 putchar('\n');
+                cursor += str_length;
             }
             i++;
         }
@@ -907,96 +913,79 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
          * resource. Therefore we only list the components this refers to.
          * Fortunately, the headers are different but the relevant information
          * is stored in the same bytes. */
-        word count;
-        fseek(f, 2*sizeof(word), SEEK_CUR);
-        count = read_word();
+        word count = read_word(offset + 4);
+        offset += 6;
         printf("    Resources: ");
         if (count--) {
-            fseek(f, 6*sizeof(word), SEEK_CUR);
-            printf("#%d", read_word());
+            printf("#%d", read_word(offset + 12));
+            offset += 14;
         }
         while (count--) {
-            fseek(f, 6*sizeof(word), SEEK_CUR);
-            printf(", #%d", read_word());
+            printf(", #%d", read_word(offset + 12));
+            offset += 14;
         }
         printf("\n");
     }
     break;
     case 0x8010: /* Version */
     {
-        struct version_header header;
-        word info_length; /* for the String/VarFileInfo */
-        word value_length; /* fixme: what is this? */
-        char info_type;
-        long cursor;
-        fread(&header, sizeof(header), 1, f);
-        if (header.value_length != 52)
-            warn("Version header length is %d (expected 52).\n", header.value_length);
-        if (strcmp((char *)header.string, "VS_VERSION_INFO"))
-            warn("Version header is %.16s (expected VS_VERSION_INFO).\n", header.string);
-        if (header.magic != 0xfeef04bd)
-            warn("Version magic number is 0x%08x (expected 0xfeef04bd).\n", header.magic);
-        if (header.struct_1 != 1 || header.struct_2 != 0)
-            warn("Version header version is %d.%d (expected 1.0).\n", header.struct_1, header.struct_2);
-        print_rsrc_version_flags(header);
+        const struct version_header *header = read_data(offset);
+        const off_t end = offset + header->length;
+        off_t cursor;
+
+        if (header->value_length != 52)
+            warn("Version header length is %d (expected 52).\n", header->value_length);
+        if (strcmp((char *)header->string, "VS_VERSION_INFO"))
+            warn("Version header is %.16s (expected VS_VERSION_INFO).\n", header->string);
+        if (header->magic != 0xfeef04bd)
+            warn("Version magic number is 0x%08x (expected 0xfeef04bd).\n", header->magic);
+        if (header->struct_1 != 1 || header->struct_2 != 0)
+            warn("Version header version is %d.%d (expected 1.0).\n", header->struct_1, header->struct_2);
+        print_rsrc_version_flags(*header);
 
         printf("    File version:    %d.%d.%d.%d\n",
-               header.file_1, header.file_2, header.file_3, header.file_4);
+               header->file_1, header->file_2, header->file_3, header->file_4);
         printf("    Product version: %d.%d.%d.%d\n",
-               header.prod_1, header.prod_2, header.prod_3, header.prod_4);
+               header->prod_1, header->prod_2, header->prod_3, header->prod_4);
 
         if (0) {
         printf("    Created on: ");
-        print_timestamp(header.date_1, header.date_2);
+        print_timestamp(header->date_1, header->date_2);
         putchar('\n');
         }
 
-        /* header's out of the way, now we have to possibly parse a StringFileInfo */
-        if (header.length == sizeof(struct version_header))
-            return; /* I don't have any testcases available so I think this is correct */
+        offset += sizeof(struct version_header);
 
-        cursor = ftell(f);
-        info_length = read_word();
-        value_length = read_word();
-        if (value_length != 0)
-            warn("Value length is nonzero: %04x\n", value_length);
+        while (offset < end)
+        {
+            word info_length = read_word(offset);
+            word value_length = read_word(offset + 2);
+            const char *key = read_data(offset + 4);
 
-        /* "type" is again omitted */
-        if ((info_type = read_byte()) == 'S'){
-            /* we have a StringFileInfo */
-            fseek(f, 15*sizeof(byte), SEEK_CUR);
-            print_rsrc_stringfileinfo(cursor+info_length);
-            if (header.length == (sizeof(struct version_header) + info_length))
-                return;
+            if (value_length)
+                warn("Value length is nonzero: %04x\n", value_length);
 
-            info_length = read_word();
-            fseek(f, sizeof(word), SEEK_CUR);
-            info_type = read_byte();
+            /* "type" is again omitted */
+            if (!strcmp(key, "StringFileInfo"))
+                print_rsrc_stringfileinfo(offset + 20, offset + info_length);
+            else if (!strcmp(key, "VarFileInfo"))
+                print_rsrc_varfileinfo(offset + 16, offset + info_length);
+            else
+                warn("Unrecognized file info key: %s\n", key);
+
+            offset += ((info_length + 3) & ~3);
         }
-
-        if (info_type == 'V'){
-            /* we have a VarFileInfo */
-            fseek(f, 11*sizeof(byte), SEEK_CUR);
-            print_rsrc_varfileinfo(cursor+info_length);
-        } else {
-            char c;
-            warn("Unrecognized file info key: ");
-            fseek(f, -sizeof(byte), SEEK_CUR);
-            while ((c = read_byte())) fputc(c, stderr);
-            printf("\n");
-        }
+        break;
     }
-    break;
     default:
     {
-        long cursor;
-        byte row[16];
+        off_t cursor;
         char len;
         int i;
         /* hexl-style dump */
-        while ((cursor = ftell(f)) < offset+length){
-            len = (offset+length-cursor >= 16) ? 16 : (offset+length-cursor);
-            fread(row, sizeof(byte), len, f);
+        while (cursor < offset+length)
+        {
+            len = min(offset + length - cursor, 16);
             
             printf("    %lx:", cursor);
             for (i=0; i<16; i++){
@@ -1004,18 +993,18 @@ static void print_rsrc_resource(word type, long offset, long length, word rn_id)
                     /* Since this is 16 bits, we put a space after (before) every other two bytes. */
                     putchar(' ');
                 if (i<len)
-                    printf("%02x", row[i]);
+                    printf("%02x", read_byte(cursor + i));
                 else
                     printf("  ");
             }
             printf("  ");
             for (i=0; i<len; i++){
-                if ((row[i] >= ' ') && (row[i] <= '~'))
-                    putchar(row[i]);
-                else
-                    putchar('.');
+                char c = read_byte(cursor + i);
+                putchar(isprint(c) ? c : '.');
             }
             putchar('\n');
+
+            cursor += len;
         }
     }
     break;
@@ -1062,39 +1051,47 @@ struct resource {
 
 STATIC_ASSERT(sizeof(struct resource) == 0xc);
 
-void print_rsrc(long start){
-    word align = read_word();
+struct type_header
+{
     word type_id;
     word count;
     dword resloader; /* fixme: what is this? */
-    struct resource rn;
+    struct resource resources[1];
+};
+
+void print_rsrc(off_t start){
+    const struct type_header *header;
+    word align = read_word(start);
     long cursor;
     char *idstr;
+    word i;
 
-    while ((type_id = read_word())){
-        count = read_word();
-        resloader = read_dword();
-        if (resloader)
-            warn("resloader is nonzero: %08x\n", resloader);
-        while (count--){
-            fread(&rn, sizeof(rn), 1, f);
-            cursor = ftell(f);
+    header = read_data(start + sizeof(word));
 
-            if (rn.id & 0x8000){
+    while (header->type_id)
+    {
+        if (header->resloader)
+            warn("resloader is nonzero: %08x\n", header->resloader);
+
+        for (i = 0; i < header->count; ++i)
+        {
+            const struct resource *rn = &header->resources[i];
+
+            if (rn->id & 0x8000){
                 idstr = malloc(6);
-                sprintf(idstr, "%d", rn.id & ~0x8000);
+                sprintf(idstr, "%d", rn->id & ~0x8000);
             } else
-                idstr = dup_string_resource(start + rn.id);
+                idstr = dup_string_resource(start + rn->id);
 
-            if (type_id & 0x8000)
+            if (header->type_id & 0x8000)
             {
-                if ((type_id & (~0x8000)) < rsrc_types_count && rsrc_types[type_id & (~0x8000)]){
-                    if (!filter_resource(rsrc_types[type_id & ~0x8000], idstr))
+                if ((header->type_id & (~0x8000)) < rsrc_types_count && rsrc_types[header->type_id & (~0x8000)]){
+                    if (!filter_resource(rsrc_types[header->type_id & ~0x8000], idstr))
                         goto next;
-                    printf("\n%s", rsrc_types[type_id & ~0x8000]);
+                    printf("\n%s", rsrc_types[header->type_id & ~0x8000]);
                 } else {
                     char typestr[7];
-                    sprintf(typestr, "0x%04x", type_id);
+                    sprintf(typestr, "0x%04x", header->type_id);
                     if (!filter_resource(typestr, idstr))
                         goto next;
                     printf("\n%s", typestr);
@@ -1102,7 +1099,7 @@ void print_rsrc(long start){
             }
             else
             {
-                char *typestr = dup_string_resource(start + type_id);
+                char *typestr = dup_string_resource(start + header->type_id);
                 if (!filter_resource(typestr, idstr))
                 {
                     free(typestr);
@@ -1113,15 +1110,16 @@ void print_rsrc(long start){
             }
 
             printf(" %s", idstr);
-            printf(" (offset = 0x%x, length = %d [0x%x]", rn.offset << align, rn.length << align, rn.length << align);
-            print_rsrc_flags(rn.flags);
+            printf(" (offset = 0x%x, length = %d [0x%x]", rn->offset << align, rn->length << align, rn->length << align);
+            print_rsrc_flags(rn->flags);
             printf("):\n");
 
-            print_rsrc_resource(type_id, rn.offset << align, rn.length << align, rn.id);
+            print_rsrc_resource(header->type_id, rn->offset << align, rn->length << align, rn->id);
 
 next:
             free(idstr);
-            fseek(f, cursor, SEEK_SET);
         }
+
+        header = (struct type_header *)(&header->resources[header->count]);
     }
 }

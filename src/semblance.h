@@ -14,32 +14,31 @@ typedef uint16_t word;
 typedef uint32_t dword;
 typedef uint64_t qword;
 
-FILE *f;
+byte *map;
 
-static inline byte read_byte(){
-    return getc(f);
+static inline const void *read_data(off_t offset)
+{
+    return map + offset;
 }
 
-static inline word read_word(){
-    word w;
-    fread(&w,2,1,f);
-    return w;
+static inline byte read_byte(off_t offset)
+{
+    return map[offset];
 }
 
-static inline dword read_dword(){
-    dword d;
-    fread(&d,4,1,f);
-    return d;
+static inline word read_word(off_t offset)
+{
+    return *(word *)(map + offset);
 }
 
-static inline dword read_qword(){
-    qword q;
-    fread(&q,8,1,f);
-    return q;
+static inline dword read_dword(off_t offset)
+{
+    return *(dword *)(map + offset);
 }
 
-static inline void skip_padding(char bytes){
-    fseek(f, ((bytes-1) & (bytes-(ftell(f)%bytes)))*sizeof(byte), SEEK_CUR);
+static inline dword read_qword(off_t offset)
+{
+    return *(qword *)(map + offset);
 }
 
 #define min(a,b) (((a)<(b))?(a):(b))

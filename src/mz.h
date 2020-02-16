@@ -44,9 +44,8 @@ struct reloc {
 struct mz {
     /* fixme: file pointer here */
 
-    struct header_mz header;
-
-    struct reloc *reltab;
+    const struct header_mz *header;
+    const struct reloc *reltab;
 
     /* code */
     dword entry_point;

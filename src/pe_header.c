@@ -1,7 +1,7 @@
 /*
  * Functions for parsing the PE header
  *
- * Copyright 2017-2018 Zebediah Figura
+ * Copyright 2017-2018,2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -91,7 +91,8 @@ static const char *const subsystems[] = {
     0
 };
 
-static void print_opt32(struct optional_header *opt) {
+static void print_opt32(const struct optional_header *opt)
+{
     printf("File version: %d.%d\n", opt->MajorImageVersion, opt->MinorImageVersion); /* 44 */
 
     printf("Linker version: %d.%d\n", opt->MajorLinkerVersion, opt->MinorLinkerVersion); /* 1a */
@@ -129,7 +130,8 @@ static void print_opt32(struct optional_header *opt) {
         warn("LoaderFlags is 0x%x (expected 0)\n", opt->LoaderFlags); /* 70 */
 }
 
-static void print_opt64(struct optional_header_pep *opt) {
+static void print_opt64(const struct optional_header_pep *opt)
+{
     printf("File version: %d.%d\n", opt->MajorImageVersion, opt->MinorImageVersion); /* 44 */
 
     printf("Linker version: %d.%d\n", opt->MajorLinkerVersion, opt->MinorLinkerVersion); /* 1a */
@@ -169,21 +171,21 @@ static void print_opt64(struct optional_header_pep *opt) {
 static void print_header(struct pe *pe) {
     putchar('\n');
 
-    if (!pe->header.SizeOfOptionalHeader) {
+    if (!pe->header->SizeOfOptionalHeader) {
         printf("No optional header\n");
         return;
-    } else if (pe->header.SizeOfOptionalHeader < sizeof(struct optional_header))
+    } else if (pe->header->SizeOfOptionalHeader < sizeof(struct optional_header))
         warn("Size of optional header is %u (expected at least %lu).\n",
-            pe->header.SizeOfOptionalHeader, sizeof(struct optional_header));
+            pe->header->SizeOfOptionalHeader, sizeof(struct optional_header));
 
-    print_flags(pe->header.Characteristics); /* 16 */
+    print_flags(pe->header->Characteristics); /* 16 */
 
     if (pe->magic == 0x10b) {
         printf("Image type: 32-bit\n");
-        print_opt32(&pe->opt32);
+        print_opt32(pe->opt32);
     } else if (pe->magic == 0x20b) {
         printf("Image type: 64-bit\n");
-        print_opt64(&pe->opt64);
+        print_opt64(pe->opt64);
     }
 }
 
@@ -221,43 +223,27 @@ struct export_header {
 
 STATIC_ASSERT(sizeof(struct export_header) == 0x28);
 
-static char *fstrdup(long offset) {
-    long cursor = ftell(f);
-    int len;
-    char *ret;
-
-    fseek(f, offset, SEEK_SET);
-    while (read_byte());
-    len = ftell(f)-offset+1;
-    fseek(f, offset, SEEK_SET);
-    ret = malloc(len);
-    fread(ret, sizeof(char), len, f);
-
-    fseek(f, cursor, SEEK_SET);
-    return ret;
-}
-
 static void get_export_table(struct pe *pe) {
-    struct export_header header;
-    long offset = addr2offset(pe->dirs[0].address, pe);
-    int i, j;
+    const struct export_header *header;
     dword address;
+    off_t offset;
+    int i, j;
 
     /* More headers. It's like a PE file is nothing but headers.
      * Do we really need to print any of this? No, not really. Just use the data. */
-    fseek(f, offset, SEEK_SET);
-    fread(&header, sizeof(struct export_header), 1, f);
+    header = read_data(addr2offset(pe->dirs[0].address, pe));
+    offset = addr2offset(header->addr_table_addr, pe);
 
     /* Grab the name. */
-    pe->name = fstrdup(addr2offset(header.module_name_addr, pe));
+    pe->name = read_data(addr2offset(header->module_name_addr, pe));
 
     /* If a DLL exports by ordinal and there are holes, they will have a 0
      * address. We don't really want to put them in our table in that case, so
      * run through it once to see how many exports there really are. */
     pe->export_count = 0;
-    fseek(f, addr2offset(header.addr_table_addr, pe), SEEK_SET);
-    for (i=0; i<header.addr_table_count; i++) {
-        if (read_dword())
+    for (i = 0; i < header->addr_table_count; ++i)
+    {
+        if (read_dword(offset + i * 4))
             pe->export_count++;
     }
 
@@ -267,12 +253,12 @@ static void get_export_table(struct pe *pe) {
     /* If addr_table_count exceeds export_count, this means that some exports
      * are nameless (and thus exported by ordinal). */
 
-    fseek(f, addr2offset(header.addr_table_addr, pe), SEEK_SET);
     j = 0;
-    for (i=0; i<header.addr_table_count; i++) {
-        if ((address = read_dword()))
+    for (i = 0; i < header->addr_table_count; ++i)
+    {
+        if ((address = read_dword(offset + i * 4)))
         {
-            pe->exports[j].ordinal = i + header.ordinal_base;
+            pe->exports[j].ordinal = i + header->ordinal_base;
             pe->exports[j].address = address;
             pe->exports[j].name = NULL;
             j++;
@@ -281,107 +267,95 @@ static void get_export_table(struct pe *pe) {
     assert(j == pe->export_count);
 
     /* Why? WHY? */
-    for (i=0; i<header.export_count; i++) {
-        word index;
-
-        fseek(f, addr2offset(header.ord_table_addr, pe) + (i * sizeof(word)), SEEK_SET);
-        index = read_word();
-        fseek(f, addr2offset(header.name_table_addr, pe) + (i * sizeof(dword)), SEEK_SET);
-        pe->exports[index].name = fstrdup(addr2offset(read_dword(), pe));
+    for (i = 0; i < header->export_count; ++i)
+    {
+        word index = read_word(addr2offset(header->ord_table_addr, pe) + (i * sizeof(word)));
+        dword name_addr = read_dword(addr2offset(header->name_table_addr, pe) + (i * sizeof(dword)));
+        pe->exports[index].name = read_data(addr2offset(name_addr, pe));
     }
 }
 
 static void get_import_name_table(struct import_module *module, struct pe *pe) {
-    long offset = addr2offset(module->nametab_addr, pe);
-    long cursor = ftell(f);
+    off_t offset = addr2offset(module->nametab_addr, pe);
     unsigned i, count;
 
-    fseek(f, offset, SEEK_SET);
     count = 0;
     if (pe->magic == 0x10b)
-        while (read_dword()) count++;
+        while (read_dword(offset + count * 4)) count++;
     else
-        while (read_qword()) count++;
+        while (read_qword(offset + count * 8)) count++;
 
-    module->nametab = malloc(count * sizeof(char *));
+    module->nametab = malloc(count * sizeof(*module->nametab));
 
-    fseek(f, offset, SEEK_SET);
     for (i = 0; i < count; i++) {
-        qword address = (pe->magic == 0x10b) ? read_dword() : read_qword();
-        if (address & 0x80000000) {
-            address &= 0x7fffffff;
-            module->nametab[i] = malloc(snprintf(NULL, 0, "%s.%lu", module->module, address));
-            sprintf(module->nametab[i], "%s.%lu", module->module, address);
-        } else
-            module->nametab[i] = fstrdup(addr2offset(address, pe) + 2); /* skip hint */
+        qword address = (pe->magic == 0x10b) ? read_dword(offset + i * 4) : read_qword(offset + i * 8);
+        if ((module->nametab[i].is_ordinal = !!(address & 0x80000000)))
+            module->nametab[i].ordinal = (word)address;
+        else
+            module->nametab[i].name = read_data(addr2offset(address, pe) + 2); /* skip hint */
     }
     module->count = count;
-
-    fseek(f, cursor, SEEK_SET);
 }
 
 static void get_import_module_table(struct pe *pe) {
-    long offset = addr2offset(pe->dirs[1].address, pe);
+    off_t offset = addr2offset(pe->dirs[1].address, pe);
     static const dword zeroes[5] = {0};
     dword entry[5];
     int i;
 
-    fseek(f, offset, SEEK_SET);
     pe->import_count = 0;
-
-    while (fread(entry, sizeof(dword), 5, f) == 5 && memcmp(entry, zeroes, sizeof(entry)))
+    while (memcmp(read_data(offset + pe->import_count * 20), zeroes, 20))
         pe->import_count++;
 
     pe->imports = malloc(pe->import_count * sizeof(struct import_module));
 
-    fseek(f, offset, SEEK_SET);
-
-    for (i = 0; i < pe->import_count; i++) {
-
-        fread(entry, sizeof(dword), 5, f);
-        pe->imports[i].module = fstrdup(addr2offset(entry[3], pe));
-        pe->imports[i].nametab_addr = entry[0];
+    for (i = 0; i < pe->import_count; i++)
+    {
+        pe->imports[i].module = read_data(addr2offset(read_dword(offset + i * 20 + 12), pe));
+        pe->imports[i].nametab_addr = read_dword(offset + i * 20);
         get_import_name_table(&pe->imports[i], pe);
     }
 }
 
 static void get_reloc_table(struct pe *pe) {
-    long offset = addr2offset(pe->dirs[5].address, pe);
+    off_t offset = addr2offset(pe->dirs[5].address, pe);
 
-    fseek(f, offset, SEEK_SET);
-    pe->reloc_base = read_dword();
-    pe->reloc_count = (read_dword() - 8) / 2;
-    pe->relocs = malloc(pe->reloc_count * sizeof(struct reloc_pe));
-    fread(pe->relocs, sizeof(struct reloc_pe), pe->reloc_count, f);
+    pe->reloc_base = read_dword(offset);
+    pe->reloc_count = (read_dword(offset + 4) - 8) / 2;
+    pe->relocs = read_data(offset + 8);
 }
 
-void readpe(long offset_pe, struct pe *pe) {
+void readpe(off_t offset_pe, struct pe *pe)
+{
+    off_t offset;
     int i, cdirs;
 
-    fseek(f, offset_pe + sizeof(dword), SEEK_SET);
-    fread(&pe->header, sizeof(struct file_header), 1, f);
-    pe->magic = read_word();
-    fseek(f, -sizeof(word), SEEK_CUR);
-    if (pe->magic == 0x10b) {
-        fread(&pe->opt32, sizeof(struct optional_header), 1, f);
-        pe->imagebase = pe->opt32.ImageBase;
-        cdirs = pe->opt32.NumberOfRvaAndSizes;
+    pe->header = read_data(offset_pe + 4);
+    pe->magic = read_word(offset_pe + 4 + sizeof(struct file_header));
+    if (pe->magic == 0x10b)
+    {
+        pe->opt32 = read_data(offset_pe + 4 + sizeof(struct file_header));
+        pe->imagebase = pe->opt32->ImageBase;
+        cdirs = pe->opt32->NumberOfRvaAndSizes;
+        offset = offset_pe + 4 + sizeof(struct file_header) + sizeof(struct optional_header);
     } else if (pe->magic == 0x20b) {
-        fread(&pe->opt64, sizeof(struct optional_header_pep), 1, f);
-        pe->imagebase = pe->opt64.ImageBase;
-        cdirs = pe->opt64.NumberOfRvaAndSizes;
+        pe->opt64 = read_data(offset_pe + 4 + sizeof(struct file_header));
+        pe->imagebase = pe->opt64->ImageBase;
+        cdirs = pe->opt64->NumberOfRvaAndSizes;
+        offset = offset_pe + 4 + sizeof(struct file_header) + sizeof(struct optional_header_pep);
     } else {
         warn("Don't know how to read image type %#x\n", pe->magic);
         exit(1);
     }
 
-    pe->dirs = malloc(cdirs * sizeof(struct directory));
-    fread(pe->dirs, sizeof(struct directory), cdirs, f);
+    pe->dirs = read_data(offset);
+    offset += cdirs * sizeof(struct directory);
 
     /* read the section table */
-    pe->sections = malloc(pe->header.NumberOfSections * sizeof(struct section));
-    for (i = 0; i < pe->header.NumberOfSections; i++) {
-        fread(&pe->sections[i], 0x28, 1, f);
+    pe->sections = malloc(pe->header->NumberOfSections * sizeof(struct section));
+    for (i = 0; i < pe->header->NumberOfSections; i++)
+    {
+        memcpy(&pe->sections[i], read_data(offset + i*0x28), 0x28);
 
         /* allocate zeroes, but only if it's a code section */
         /* in theory nobody will ever try to jump into a data section.
@@ -409,24 +383,15 @@ void readpe(long offset_pe, struct pe *pe) {
 }
 
 void freepe(struct pe *pe) {
-    int i, j;
+    int i;
 
-    free(pe->dirs);
-    for (i = 0; i < pe->header.NumberOfSections; i++)
+    for (i = 0; i < pe->header->NumberOfSections; i++)
         free(pe->sections[i].instr_flags);
     free(pe->sections);
-    free(pe->name);
-    for (i = 0; i < pe->export_count; i++)
-        free(pe->exports[i].name);
     free(pe->exports);
-    for (i = 0; i < pe->import_count; i++) {
-        for (j = 0; j < pe->imports[i].count; j++)
-            free(pe->imports[i].nametab[j]);
+    for (i = 0; i < pe->import_count; i++)
         free(pe->imports[i].nametab);
-        free(pe->imports[i].module);
-    }
     free(pe->imports);
-    free(pe->relocs);
 }
 
 void dumppe(long offset_pe) {
@@ -457,7 +422,7 @@ void dumppe(long offset_pe) {
      * Internally we want to use relative IPs everywhere possible. The only place
      * that we can't is in arg->value. */
     if (pe_rel_addr == -1)
-        pe_rel_addr = pe.header.Characteristics & 0x2000;
+        pe_rel_addr = pe.header->Characteristics & 0x2000;
 
     printf("Module type: PE (Portable Executable)\n");
     if (pe.name) printf("Module name: %s\n", pe.name);
@@ -479,9 +444,7 @@ void dumppe(long offset_pe) {
                 if (pe.exports[i].address >= pe.dirs[0].address &&
                     pe.exports[i].address < (pe.dirs[0].address + pe.dirs[0].size)) {
                     char c;
-                    printf(" -> ");
-                    fseek(f, addr2offset(pe.exports[i].address, &pe), SEEK_SET);
-                    while ((c = read_byte())) putchar(c);
+                    printf(" -> %s", (const char *)read_data(addr2offset(pe.exports[i].address, &pe)));
                 }
                 putchar('\n');
             }
@@ -500,7 +463,12 @@ void dumppe(long offset_pe) {
             for (i = 0; i < pe.import_count; i++) {
                 printf("\t%s:\n", pe.imports[i].module);
                 for (j = 0; j < pe.imports[i].count; j++)
-                    printf("\t\t%s\n", pe.imports[i].nametab[j]);
+                {
+                    if (pe.imports[i].nametab[j].is_ordinal)
+                        printf("\t\t<ordinal %u>\n", pe.imports[i].nametab[j].ordinal);
+                    else
+                        printf("\t\t%s\n", pe.imports[i].nametab[j].name);
+                }
             }
         } else
             printf("No imported module table\n");

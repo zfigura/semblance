@@ -1,7 +1,7 @@
 /*
  * Functions for dumping PE code and data sections
  *
- * Copyright 2018 Zebediah Figura
+ * Copyright 2018,2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -20,6 +20,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <ctype.h>
 #include <string.h>
 #include "semblance.h"
 #include "pe.h"
@@ -39,7 +40,7 @@ struct section *addr2section(dword addr, const struct pe *pe) {
     /* Even worse than the below, some data is sensitive to which section it's in! */
 
     int i;
-    for (i = 0; i < pe->header.NumberOfSections; i++) {
+    for (i = 0; i < pe->header->NumberOfSections; i++) {
          if (addr >= pe->sections[i].address && addr < pe->sections[i].address + pe->sections[i].min_alloc)
             return &pe->sections[i];
     }
@@ -47,11 +48,11 @@ struct section *addr2section(dword addr, const struct pe *pe) {
     return NULL;
 }
 
-long addr2offset(dword addr, const struct pe *pe) {
+off_t addr2offset(dword addr, const struct pe *pe) {
     /* Everything inside a PE file is built so that the file is read while it's
      * already loaded. Offsets aren't file offsets, they're *memory* offsets.
-     * We don't want to load the whole file, so we have to search through each
-     * section to figure out where in the *file* a virtual address points. */
+     * We don't want to load the file like that, so we have to search through
+     * each section to figure out where in the *file* a virtual address points. */
 
     struct section *section = addr2section(addr, pe);
     if (!section) return 0;
@@ -59,7 +60,7 @@ long addr2offset(dword addr, const struct pe *pe) {
 }
 
 /* index function */
-static char *get_export_name(dword ip, const struct pe *pe) {
+static const char *get_export_name(dword ip, const struct pe *pe) {
     int i;
     for (i = 0; i < pe->export_count; i++) {
         if (pe->exports[i].address == ip)
@@ -68,16 +69,26 @@ static char *get_export_name(dword ip, const struct pe *pe) {
     return NULL;
 }
 
-static char *get_imported_name(dword offset, const struct pe *pe) {
+static const char *get_imported_name(dword offset, const struct pe *pe) {
+    static char comment[256];
     unsigned i;
 
     offset -= pe->imagebase;
 
-    for (i = 0; i < pe->import_count; i++) {
-        unsigned index = (offset - pe->imports[i].nametab_addr) /
+    for (i = 0; i < pe->import_count; ++i)
+    {
+        struct import_module *module = &pe->imports[i];
+        unsigned index = (offset - module->nametab_addr) /
                          ((pe->magic == 0x10b) ? sizeof(dword) : sizeof(qword));
-        if (index < pe->imports[i].count)
-            return pe->imports[i].nametab[index];
+        if (index < module->count)
+        {
+            if (module->nametab[index].is_ordinal)
+            {
+                sprintf(comment, "%s.%u\n", module->module, module->nametab[index].ordinal);
+                return comment;
+            }
+            return pe->imports[i].nametab[index].name;
+        }
     }
     return NULL;
 }
@@ -101,7 +112,7 @@ static char *relocate_arg(struct instr *instr, struct arg *arg, const struct pe 
         return NULL;    /* not even a real relocation, just padding */
     else if (r->type == 3) {
         if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == -1) || arg->type == MOFFS16) {
-            snprintf(comment, 10, "%lx", arg->value - pe->opt32.ImageBase);
+            snprintf(comment, 10, "%lx", arg->value - pe->opt32->ImageBase);
             return comment;
         }
     }
@@ -112,7 +123,7 @@ static char *relocate_arg(struct instr *instr, struct arg *arg, const struct pe 
 static int print_pe_instr(const struct section *sec, dword ip, byte *p, const struct pe *pe) {
     struct instr instr = {0};
     unsigned len;
-    char *comment = NULL;
+    const char *comment = NULL;
     char ip_string[17];
     qword absip = ip;
     int bits = (pe->magic == 0x10b) ? 32 : 64;
@@ -145,9 +156,8 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, const st
             /* Sometimes we have TWO levels of indirection—call to jmp to
              * relocated address. mingw-w64 does this. */
 
-            fseek(f, addr2offset(instr.args[0].value, pe), SEEK_SET);
-            if (read_byte() == 0xff && read_byte() == 0x25) /* absolute jmp */
-                comment = get_imported_name(read_dword(), pe);
+            if (read_word(addr2offset(instr.args[0].value, pe)) == 0x25ff) /* absolute jmp */
+                comment = get_imported_name(read_dword(addr2offset(instr.args[0].value, pe) + 2), pe);
         }
     }
 
@@ -202,16 +212,14 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
     byte buffer[MAX_INSTR];
 
     while (relip < sec->length && relip < sec->min_alloc) {
-        fseek(f, sec->offset + relip, SEEK_SET);
-
         /* find a valid instruction */
         if (!(sec->instr_flags[relip] & INSTR_VALID)) {
             if (opts & DISASSEMBLE_ALL) {
                 /* still skip zeroes */
-                if (read_byte() == 0) {
+                if (read_byte(sec->offset + relip) == 0) {
                     printf("     ...\n");
                     relip++;
-                    while (read_byte() == 0) relip++;
+                    while (read_byte(sec->offset + relip) == 0) relip++;
                 }
             } else {
                 printf("     ...\n");
@@ -220,21 +228,19 @@ static void print_disassembly(const struct section *sec, const struct pe *pe) {
         }
 
         ip = relip + sec->address;
-        fseek(f, sec->offset + relip, SEEK_SET);
         if (relip >= sec->length || relip >= sec->min_alloc) return;
 
         /* Instructions can "hang over" the end of a segment.
          * Zero should be supplied. */
         memset(buffer, 0, sizeof(buffer));
-
-        fread(buffer, 1, min(sizeof(buffer), sec->length - relip), f);
+        memcpy(buffer, read_data(sec->offset + relip), min(sizeof(buffer), sec->length - relip));
 
         absip = ip;
         if (!pe_rel_addr)
             absip += pe->imagebase;
 
         if (sec->instr_flags[relip] & INSTR_FUNC) {
-            char *name = get_export_name(ip, pe);
+            const char *name = get_export_name(ip, pe);
             printf("\n");
             printf("%lx <%s>:\n", absip, name ? name : "no name");
         }
@@ -253,12 +259,8 @@ static void print_data(const struct section *sec, struct pe *pe) {
     dword length = min(sec->length, sec->min_alloc);
 
     for (relip = 0; relip < length; relip += 16) {
-        byte row[16];
         int len = min(length-relip, 16);
         int i;
-
-        fseek(f, sec->offset + relip, SEEK_SET);
-        fread(row, sizeof(byte), len, f);
 
         absip = relip + sec->address;
         if (!pe_rel_addr)
@@ -267,16 +269,15 @@ static void print_data(const struct section *sec, struct pe *pe) {
         printf("%8lx", absip);
         for (i=0; i<16; i++) {
             if (i < len)
-                printf(" %02x", row[i]);
+                printf(" %02x", read_byte(sec->offset + relip + i));
             else
                 printf("   ");
         }
         printf("  ");
-        for (i=0; i<len; i++){
-                if ((row[i] >= ' ') && (row[i] <= '~'))
-                    putchar(row[i]);
-                else
-                    putchar('.');
+        for (i = 0; i < len; ++i)
+        {
+            char c = read_byte(sec->offset + relip + i);
+            putchar(isprint(c) ? c : '.');
         }
         putchar('\n');
     }
@@ -311,9 +312,8 @@ static void scan_segment(dword ip, struct pe *pe) {
         if (sec->instr_flags[relip] & INSTR_SCANNED) return;
 
         /* read the instruction */
-        fseek(f, sec->offset + relip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));
-        fread(buffer, 1, min(sizeof(buffer), sec->length-relip), f);
+        memcpy(buffer, read_data(sec->offset + relip), min(sizeof(buffer), sec->length-relip));
         instr_length = get_instr(ip, buffer, &instr, (pe->magic == 0x10b) ? 32 : 64);
 
         /* mark the bytes */
@@ -349,13 +349,12 @@ static void scan_segment(dword ip, struct pe *pe) {
                 struct section *tsec;
                 dword taddr;
 
-                fseek(f, sec->offset + i, SEEK_SET);
                 switch (r->type)
                 {
                 case 3: /* HIGHLOW */
                     if (pe->magic != 0x10b)
                         warn_at("HIGHLOW relocation in 64-bit image?\n");
-                    taddr = read_dword() - pe->opt32.ImageBase;
+                    taddr = read_dword(sec->offset + i) - pe->opt32->ImageBase;
                     tsec = addr2section(taddr, pe);
                     /* Only try to scan it if it's an immediate address. If someone is
                      * dereferencing an address inside a code section, it's data. */
@@ -426,7 +425,7 @@ static void print_section_flags(dword flags) {
  * of them. Fortunately we actually have everything we need already. */
 
 void read_sections(struct pe *pe) {
-    dword entry_point = (pe->magic == 0x10b) ? pe->opt32.AddressOfEntryPoint : pe->opt64.AddressOfEntryPoint;
+    dword entry_point = (pe->magic == 0x10b) ? pe->opt32->AddressOfEntryPoint : pe->opt64->AddressOfEntryPoint;
     int i;
 
     /* We already read the section header (unlike NE, we had to in order to read
@@ -487,7 +486,7 @@ void print_sections(struct pe *pe) {
     int i;
     struct section *sec;
 
-    for (i = 0; i < pe->header.NumberOfSections; i++) {
+    for (i = 0; i < pe->header->NumberOfSections; i++) {
         sec = &pe->sections[i];
 
         putchar('\n');

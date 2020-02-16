@@ -123,13 +123,21 @@ STATIC_ASSERT(sizeof(struct reloc_pe) == 0x2);
 struct export {
     dword address;
     word ordinal;
-    char *name;
+    const char *name;
 };
 
 struct import_module {
-    char *module;
+    const char *module;
     dword nametab_addr;
-    char **nametab;
+    struct
+    {
+        union
+        {
+            const char *name;
+            word ordinal;
+        };
+        int is_ordinal;
+    } *nametab;
     unsigned count;
 };
 
@@ -137,14 +145,14 @@ struct pe {
     word magic; /* same as opt->Magic field, but avoids casting */
     qword imagebase; /* same as opt->ImageBase field, but simpler */
 
-    struct file_header header;
+    const struct file_header *header;
     union {
-        struct optional_header opt32;
-        struct optional_header_pep opt64;
+        const struct optional_header *opt32;
+        const struct optional_header_pep *opt64;
     };
-    struct directory *dirs;
+    const struct directory *dirs;
 
-    char *name;
+    const char *name;
 
     struct section *sections;
 
@@ -155,13 +163,13 @@ struct pe {
     unsigned import_count;
 
     dword reloc_base;
-    struct reloc_pe *relocs;
+    const struct reloc_pe *relocs;
     unsigned reloc_count;
 };
 
 /* in pe_section.c */
 extern struct section *addr2section(dword addr, const struct pe *pe);
-extern long addr2offset(dword addr, const struct pe *pe);
+extern off_t addr2offset(dword addr, const struct pe *pe);
 extern void read_sections(struct pe *pe);
 extern void print_sections(struct pe *pe);
 

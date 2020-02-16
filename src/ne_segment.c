@@ -1,7 +1,7 @@
 /*
  * Functions for dumping NE code and data segments
  *
- * Copyright 2017-2018 Zebediah Figura
+ * Copyright 2017-2018,2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -20,6 +20,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301, USA
  */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -162,16 +163,15 @@ static void print_disassembly(const struct segment *seg, const struct ne *ne) {
     byte buffer[MAX_INSTR];
 
     while (ip < seg->length) {
-        fseek(f, seg->start+ip, SEEK_SET);
-
         /* find a valid instruction */
         if (!(seg->instr_flags[ip] & INSTR_VALID)) {
             if (opts & DISASSEMBLE_ALL) {
                 /* still skip zeroes */
-                if (read_byte() == 0) {
+                if (read_byte(seg->start + ip) == 0)
+                {
                     printf("     ...\n");
                     ip++;
-                    while (read_byte() == 0) ip++;
+                    while (read_byte(seg->start + ip) == 0) ip++;
                 }
             } else {
                 printf("     ...\n");
@@ -179,14 +179,12 @@ static void print_disassembly(const struct segment *seg, const struct ne *ne) {
             }
         }
 
-        fseek(f, seg->start+ip, SEEK_SET);
         if (ip >= seg->length) return;
 
         /* Instructions can "hang over" the end of a segment.
          * Zero should be supplied. */
         memset(buffer, 0, sizeof(buffer));
-
-        fread(buffer, 1, min(sizeof(buffer), seg->length - ip), f);
+        memcpy(buffer, read_data(seg->start + ip), min(sizeof(buffer), seg->length - ip));
 
         if (seg->instr_flags[ip] & INSTR_FUNC) {
             char *name = get_entry_name(cs, ip, ne);
@@ -205,26 +203,21 @@ static void print_data(const struct segment *seg) {
     word ip;    /* well, not really ip */
 
     for (ip = 0; ip < seg->length; ip += 16) {
-        byte row[16];
         int len = min(seg->length-ip, 16);
         int i;
-
-        fseek(f, seg->start+ip, SEEK_SET);
-        fread(row, sizeof(byte), len, f);
 
         printf("%3d:%04x", seg->cs, ip);
         for (i=0; i<16; i++) {
             if (i < len)
-                printf(" %02x", row[i]);
+                printf(" %02x", read_byte(seg->start + ip + i));
             else
                 printf("   ");
         }
         printf("  ");
-        for (i=0; i<len; i++){
-                if ((row[i] >= ' ') && (row[i] <= '~'))
-                    putchar(row[i]);
-                else
-                    putchar('.');
+        for (i = 0; i < len; ++i)
+        {
+            char c = read_byte(seg->start + ip + i);
+            putchar(isprint(c) ? c : '.');
         }
         putchar('\n');
     }
@@ -251,9 +244,8 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
         if (seg->instr_flags[ip] & INSTR_SCANNED) return;
 
         /* read the instruction */
-        fseek(f, seg->start+ip, SEEK_SET);
         memset(buffer, 0, sizeof(buffer));
-        fread(buffer, 1, min(sizeof(buffer), seg->length-ip), f);
+        memcpy(buffer, read_data(seg->start + ip), min(sizeof(buffer), seg->length - ip));
         instr_length = get_instr(ip, buffer, &instr, (seg->flags & 0x2000) ? 32 : 16);
 
         /* mark the bytes */
@@ -345,12 +337,15 @@ static void print_segment_flags(word flags) {
     printf("    Flags: 0x%04x (%s)\n", flags, buffer);
 }
 
-static void read_reloc(const struct segment *seg, struct reloc *r, struct ne *ne) {
-    byte size = read_byte();
-    byte type = read_byte();
-    word offset = read_word();
-    word module = read_word(); /* or segment */
-    word ordinal = read_word(); /* or offset */
+static void read_reloc(const struct segment *seg, word index, struct ne *ne)
+{
+    off_t entry = seg->start + seg->length + 2 + (index * 8);
+    struct reloc *r = &seg->reloc_table[index];
+    byte size = read_byte(entry);
+    byte type = read_byte(entry + 1);
+    word offset = read_word(entry + 2);
+    word module = read_word(entry + 4); /* or segment */
+    word ordinal = read_word(entry + 6); /* or offset */
 
     word offset_cursor;
     word next;
@@ -410,8 +405,7 @@ static void read_reloc(const struct segment *seg, struct reloc *r, struct ne *ne
         r->offset_count++;
         seg->instr_flags[offset_cursor] |= INSTR_RELOC;
 
-        fseek(f, seg->start+offset_cursor, SEEK_SET);
-        next = read_word();
+        next = read_word(seg->start + offset_cursor);
         if (type & 4)
             offset_cursor += next;
         else
@@ -430,8 +424,7 @@ static void read_reloc(const struct segment *seg, struct reloc *r, struct ne *ne
         r->offsets[r->offset_count] = offset_cursor;
         r->offset_count++;
 
-        fseek(f, seg->start+offset_cursor, SEEK_SET);
-        next = read_word();
+        next = read_word(seg->start + offset_cursor);
         if (type & 4)
             offset_cursor += next;
         else
@@ -448,42 +441,40 @@ static void free_reloc(struct reloc *reloc_data, word reloc_count) {
     free(reloc_data);
 }
 
-void read_segments(long start, struct ne *ne) {
+void read_segments(off_t start, struct ne *ne)
+{
     word entry_cs = ne->header.ne_cs;
     word entry_ip = ne->header.ne_ip;
     word count = ne->header.ne_cseg;
-    unsigned i, cs;
     struct segment *seg;
-
-    fseek(f, start, SEEK_SET);
+    word i, j;
 
     ne->segments = malloc(count * sizeof(struct segment));
 
-    for (cs = 1; cs <= count; cs++) {
-        seg = &ne->segments[cs-1];
-        seg->cs = cs;
-        seg->start = read_word() << ne->header.ne_align;
-        seg->length = read_word();
-        seg->flags = read_word();
-        seg->min_alloc = read_word();
+    for (i = 0; i < count; ++i)
+    {
+        seg = &ne->segments[i];
+        seg->cs = i + 1;
+        seg->start = read_word(start + i*8) << ne->header.ne_align;
+        seg->length = read_word(start + i*8 + 2);
+        seg->flags = read_word(start + i*8 + 4);
+        seg->min_alloc = read_word(start + i*8 + 6);
 
         /* Use min_alloc rather than length because data can "hang over". */
         seg->instr_flags = calloc(seg->min_alloc, sizeof(byte));
     }
 
     /* First pass: just read the relocation data */
-    for (cs = 1; cs <= count; cs++) {
-        seg = &ne->segments[cs-1];
+    for (i = 0; i < count; ++i)
+    {
+        seg = &ne->segments[i];
 
         if (seg->flags & 0x0100) {
-            fseek(f, seg->start + seg->length, SEEK_SET);
-            seg->reloc_count = read_word();
+            seg->reloc_count = read_word(seg->start + seg->length);
             seg->reloc_table = malloc(seg->reloc_count * sizeof(struct reloc));
 
-            for (i = 0; i < seg->reloc_count; i++) {
-                fseek(f, seg->start + seg->length + 2 + (i*8), SEEK_SET);
-                read_reloc(seg, &seg->reloc_table[i], ne);
-            }
+            for (j = 0; j < seg->reloc_count; j++)
+                read_reloc(seg, j, ne);
         } else {
             seg->reloc_count = 0;
             seg->reloc_table = NULL;
