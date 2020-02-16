@@ -97,7 +97,7 @@ static const char *get_imported_name(dword offset, const struct pe *pe) {
 static const struct reloc_pe *get_reloc(dword ip, const struct pe *pe) {
     unsigned i;
     for (i=0; i<pe->reloc_count; i++) {
-        if (pe->reloc_base + pe->relocs[i].offset == ip)
+        if (pe->relocs[i].offset == ip)
             return &pe->relocs[i];
     }
     warn_at("Byte tagged INSTR_RELOC has no reloc; this is a bug.\n");
@@ -433,7 +433,7 @@ void read_sections(struct pe *pe) {
 
     /* Relocations first. */
     for (i = 0; i < pe->reloc_count; i++) {
-        dword address = pe->reloc_base + pe->relocs[i].offset;
+        dword address = pe->relocs[i].offset;
         struct section *sec = addr2section(address, pe);
         if (!sec)
         {

@@ -318,11 +318,32 @@ static void get_import_module_table(struct pe *pe) {
 }
 
 static void get_reloc_table(struct pe *pe) {
-    off_t offset = addr2offset(pe->dirs[5].address, pe);
+    off_t offset = addr2offset(pe->dirs[5].address, pe), cursor = offset;
+    unsigned i, reloc_idx = 0;
 
-    pe->reloc_base = read_dword(offset);
-    pe->reloc_count = (read_dword(offset + 4) - 8) / 2;
-    pe->relocs = read_data(offset + 8);
+    pe->reloc_count = 0;
+    while (cursor < offset + pe->dirs[5].size)
+    {
+        pe->reloc_count += (read_dword(cursor + 4) - 8) / 2;
+        cursor += read_dword(cursor + 4);
+    }
+
+    pe->relocs = malloc(pe->reloc_count * sizeof(*pe->relocs));
+    cursor = offset;
+    while (cursor < offset + pe->dirs[5].size)
+    {
+        dword block_base = read_dword(cursor);
+        dword block_size = read_dword(cursor + 4);
+
+        for (i = 0; i < (block_size - 8) / 2; ++i)
+        {
+            word r = read_word(cursor + 8 + i * 2);
+            pe->relocs[reloc_idx].offset = block_base + (r & 0xfff);
+            pe->relocs[reloc_idx].type = r >> 12;
+            reloc_idx++;
+        }
+        cursor += block_size;
+    }
 }
 
 void readpe(off_t offset_pe, struct pe *pe)
@@ -391,6 +412,7 @@ void freepe(struct pe *pe) {
     free(pe->exports);
     for (i = 0; i < pe->import_count; i++)
         free(pe->imports[i].nametab);
+    free(pe->relocs);
     free(pe->imports);
 }
 

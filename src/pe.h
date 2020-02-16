@@ -111,12 +111,11 @@ struct section {
     byte *instr_flags;
 };
 
-struct reloc_pe {
-    unsigned int offset:12;
-    unsigned int type:4;
+struct reloc_pe
+{
+    dword offset;
+    dword type;
 };
-
-STATIC_ASSERT(sizeof(struct reloc_pe) == 0x2);
 
 #pragma pack()
 
@@ -162,8 +161,7 @@ struct pe {
     struct import_module *imports;
     unsigned import_count;
 
-    dword reloc_base;
-    const struct reloc_pe *relocs;
+    struct reloc_pe *relocs;
     unsigned reloc_count;
 };
 
