@@ -1,7 +1,7 @@
 /*
  * Functions to parse and print x86 instructions
  *
- * Copyright 2017-2018 Zebediah Figura
+ * Copyright 2017-2020 Zebediah Figura
  *
  * This file is part of Semblance.
  *
@@ -1687,8 +1687,6 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             return 1;
         }
 
-        arg->ip = ip;
-
         if (instr->addrsize != 16 && rm == 4) {
             /* SIB byte */
             p++;
@@ -1702,12 +1700,14 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
 
         if (mod == 0 && bits == 64 && rm == 5 && !instr->sib_scale) {
             /* IP-relative addressing... */
+            arg->ip = ip + 1;
             arg->value = *((dword *) (p+1));
             instr->modrm_disp = DISP_16;
             instr->modrm_reg = 16;
             ret += 4;
         } else if (mod == 0 && ((instr->addrsize == 16 && rm == 6) ||
                                 (instr->addrsize != 16 && rm == 5))) {
+            arg->ip = ip + 1;
             if (instr->addrsize == 16) {
                 arg->value = *((word *) (p+1));
                 ret += 2;
@@ -1722,12 +1722,14 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             instr->modrm_reg = rm;
             if (instr->prefix & PREFIX_REXB) instr->modrm_reg += 8;
         } else if (mod == 1) {
+            arg->ip = ip + 1;
             arg->value = *(p+1);
             instr->modrm_disp = DISP_8;
             instr->modrm_reg = rm;
             if (instr->prefix & PREFIX_REXB) instr->modrm_reg += 8;
             ret += 1;
         } else if (mod == 2) {
+            arg->ip = ip + 1;
             if (instr->addrsize == 16) {
                 arg->value = *((word *) (p+1));
                 ret += 2;
