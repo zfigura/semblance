@@ -78,7 +78,7 @@ static const char *get_imported_name(dword offset, const struct pe *pe) {
     for (i = 0; i < pe->import_count; ++i)
     {
         struct import_module *module = &pe->imports[i];
-        unsigned index = (offset - module->nametab_addr) /
+        unsigned index = (offset - module->iat_addr) /
                          ((pe->magic == 0x10b) ? sizeof(dword) : sizeof(qword));
         if (index < module->count)
         {
@@ -87,7 +87,7 @@ static const char *get_imported_name(dword offset, const struct pe *pe) {
                 sprintf(comment, "%s.%u\n", module->module, module->nametab[index].ordinal);
                 return comment;
             }
-            return pe->imports[i].nametab[index].name;
+            return module->nametab[index].name;
         }
     }
     return NULL;

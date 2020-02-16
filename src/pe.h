@@ -128,7 +128,7 @@ struct export {
 
 struct import_module {
     const char *module;
-    dword nametab_addr;
+    dword iat_addr;
     struct
     {
         union

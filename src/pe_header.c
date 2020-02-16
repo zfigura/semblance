@@ -275,8 +275,9 @@ static void get_export_table(struct pe *pe) {
     }
 }
 
-static void get_import_name_table(struct import_module *module, struct pe *pe) {
-    off_t offset = addr2offset(module->nametab_addr, pe);
+static void get_import_name_table(struct import_module *module, dword nametab_addr, struct pe *pe)
+{
+    off_t offset = addr2offset(nametab_addr, pe);
     unsigned i, count;
 
     count = 0;
@@ -311,8 +312,8 @@ static void get_import_module_table(struct pe *pe) {
     for (i = 0; i < pe->import_count; i++)
     {
         pe->imports[i].module = read_data(addr2offset(read_dword(offset + i * 20 + 12), pe));
-        pe->imports[i].nametab_addr = read_dword(offset + i * 20);
-        get_import_name_table(&pe->imports[i], pe);
+        pe->imports[i].iat_addr = read_dword(offset + i * 20 + 16);
+        get_import_name_table(&pe->imports[i], read_dword(offset + i * 20), pe);
     }
 }
 
