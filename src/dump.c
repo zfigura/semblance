@@ -141,9 +141,6 @@ int main(int argc, char *argv[]){
             break;
         case 'a': /* dump resources only */
         {
-            int ret;
-            char type[256];
-            unsigned i;
             mode |= DUMPRSRC;
             if (optarg){
                 const char *p = optarg;

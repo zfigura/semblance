@@ -73,7 +73,7 @@ static char *get_imported_name(word module, word ordinal, const struct ne *ne) {
 static const char *relocate_arg(const struct segment *seg, struct arg *arg, const struct ne *ne)
 {
     const struct reloc *r = get_reloc(seg, arg->ip);
-    char *module;
+    char *module = NULL;
 
     if (!r && arg->type == PTR32) r = get_reloc(seg, arg->ip+2);
     if (!r) {

@@ -931,7 +931,6 @@ static void print_rsrc_resource(word type, off_t offset, size_t length, word rn_
     {
         const struct version_header *header = read_data(offset);
         const off_t end = offset + header->length;
-        off_t cursor;
 
         if (header->value_length != 52)
             warn("Version header length is %d (expected 52).\n", header->value_length);
@@ -979,11 +978,11 @@ static void print_rsrc_resource(word type, off_t offset, size_t length, word rn_
     }
     default:
     {
-        off_t cursor;
+        off_t cursor = offset;
         char len;
         int i;
         /* hexl-style dump */
-        while (cursor < offset+length)
+        while (cursor < offset + length)
         {
             len = min(offset + length - cursor, 16);
             
@@ -1062,7 +1061,6 @@ struct type_header
 void print_rsrc(off_t start){
     const struct type_header *header;
     word align = read_word(start);
-    long cursor;
     char *idstr;
     word i;
 

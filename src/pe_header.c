@@ -300,7 +300,6 @@ static void get_import_name_table(struct import_module *module, struct pe *pe) {
 static void get_import_module_table(struct pe *pe) {
     off_t offset = addr2offset(pe->dirs[1].address, pe);
     static const dword zeroes[5] = {0};
-    dword entry[5];
     int i;
 
     pe->import_count = 0;
@@ -441,11 +440,9 @@ void dumppe(long offset_pe) {
                     address += pe.imagebase;
                 printf("\t%5d\t%#8x\t%s", pe.exports[i].ordinal, address,
                     pe.exports[i].name ? pe.exports[i].name : "<no name>");
-                if (pe.exports[i].address >= pe.dirs[0].address &&
-                    pe.exports[i].address < (pe.dirs[0].address + pe.dirs[0].size)) {
-                    char c;
+                if (pe.exports[i].address >= pe.dirs[0].address
+                        && pe.exports[i].address < (pe.dirs[0].address + pe.dirs[0].size))
                     printf(" -> %s", (const char *)read_data(addr2offset(pe.exports[i].address, &pe)));
-                }
                 putchar('\n');
             }
         } else
