@@ -354,7 +354,7 @@ static void scan_segment(dword ip, struct pe *pe) {
                 case 3: /* HIGHLOW */
                     if (pe->magic != 0x10b)
                         warn_at("HIGHLOW relocation in 64-bit image?\n");
-                    taddr = read_dword(sec->offset + i) - pe->opt32->ImageBase;
+                    taddr = read_dword(sec->offset + i) - pe->imagebase;
                     tsec = addr2section(taddr, pe);
                     /* Only try to scan it if it's an immediate address. If someone is
                      * dereferencing an address inside a code section, it's data. */
