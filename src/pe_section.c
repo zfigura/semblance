@@ -356,6 +356,13 @@ static void scan_segment(dword ip, struct pe *pe) {
                         warn_at("HIGHLOW relocation in 64-bit image?\n");
                     taddr = read_dword(sec->offset + i) - pe->imagebase;
                     tsec = addr2section(taddr, pe);
+
+                    if (!tsec)
+                    {
+                        warn_at("Relocation to %#x isn't in a section?\n", read_dword(sec->offset + i));
+                        continue;
+                    }
+
                     /* Only try to scan it if it's an immediate address. If someone is
                      * dereferencing an address inside a code section, it's data. */
                     if (tsec->flags & 0x20 && (instr.op.arg0 == IMM || instr.op.arg1 == IMM)) {
