@@ -400,7 +400,8 @@ void readpe(off_t offset_pe, struct pe *pe)
         get_reloc_table(pe);
 
     /* Read the code. */
-    read_sections(pe);
+    if (mode & DISASSEMBLE)
+        read_sections(pe);
 }
 
 void freepe(struct pe *pe) {
