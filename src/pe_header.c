@@ -289,8 +289,18 @@ static void get_import_name_table(struct import_module *module, dword nametab_ad
     module->nametab = malloc(count * sizeof(*module->nametab));
 
     for (i = 0; i < count; i++) {
-        qword address = (pe->magic == 0x10b) ? read_dword(offset + i * 4) : read_qword(offset + i * 8);
-        if ((module->nametab[i].is_ordinal = !!(address & 0x80000000)))
+        qword address;
+        if (pe->magic == 0x10b)
+        {
+            address = read_dword(offset + i * 4);
+            module->nametab[i].is_ordinal = !!(address & (1u << 31));
+        }
+        else
+        {
+            address = read_qword(offset + i * 8);
+            module->nametab[i].is_ordinal = !!(address & (1ull << 63));
+        }
+        if (module->nametab[i].is_ordinal)
             module->nametab[i].ordinal = (word)address;
         else
             module->nametab[i].name = read_data(addr2offset(address, pe) + 2); /* skip hint */

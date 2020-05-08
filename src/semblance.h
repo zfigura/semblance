@@ -36,7 +36,7 @@ static inline dword read_dword(off_t offset)
     return *(dword *)(map + offset);
 }
 
-static inline dword read_qword(off_t offset)
+static inline qword read_qword(off_t offset)
 {
     return *(qword *)(map + offset);
 }
