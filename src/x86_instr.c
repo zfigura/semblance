@@ -2413,8 +2413,8 @@ int get_instr(dword ip, const byte *p, struct instr *instr, int bits) {
         strcpy(instr->op.name, instr->op.size == 16 ? "cbw" : instr->op.size == 32 ? "cwde" : "cdqe");
     else if (instr->op.opcode == 0x99)
         strcpy(instr->op.name, instr->op.size == 16 ? "cwd" : instr->op.size == 32 ? "cdq" : "cqo");
-    else if (instr->op.opcode == 0xE3 && (instr->prefix & PREFIX_ADDR32))
-        strcpy(instr->op.name, "jecxz");
+    else if (instr->op.opcode == 0xE3)
+        strcpy(instr->op.name, instr->op.size == 16 ? "jcxz" : instr->op.size == 32 ? "jecxz" : "jrcxz");
     else if (instr->op.opcode == 0xD4 && instr->args[0].value == 10) {
         strcpy(instr->op.name, "aam");
         instr->op.arg0 = NONE;
