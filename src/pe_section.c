@@ -100,21 +100,62 @@ static const struct reloc_pe *get_reloc(dword ip, const struct pe *pe) {
         if (pe->relocs[i].offset == ip)
             return &pe->relocs[i];
     }
-    warn_at("Byte tagged INSTR_RELOC has no reloc; this is a bug.\n");
     return NULL;
 }
 
-static char *relocate_arg(struct instr *instr, struct arg *arg, const struct pe *pe) {
+static char *relocate_arg(const struct instr *instr, const struct arg *arg, const struct pe *pe) {
     const struct reloc_pe *r = get_reloc(arg->ip, pe);
     static char comment[10];
+
+    if (!r)
+        return NULL;
 
     if (r->type == 0)
         return NULL;    /* not even a real relocation, just padding */
     else if (r->type == 3) {
         if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == -1) || arg->type == MOFFS16) {
-            snprintf(comment, 10, "%lx", arg->value - pe->opt32->ImageBase);
+            snprintf(comment, 10, "%lx", pe_rel_addr ? arg->value - pe->opt32->ImageBase : arg->value);
             return comment;
         }
+    }
+
+    return NULL;
+}
+
+static const char *get_arg_comment(const struct section *sec,
+        const struct instr *instr, const struct arg *arg, const struct pe *pe)
+{
+    static char comment_str[10];
+    const char *comment;
+
+    if (arg->type == NONE)
+        return NULL;
+
+    /* Don't ever care about these. */
+    if (arg->type == REL8 || arg->type == REL16)
+        return NULL;
+
+    /* Relocate anything that points inside the image's address space or that
+     * has a relocation entry. */
+    if (addr2section(arg->value - pe->imagebase, pe) || (sec->instr_flags[arg->ip - sec->address] & INSTR_RELOC))
+    {
+        if ((comment = get_imported_name(arg->value, pe)))
+            return comment;
+        if ((comment = get_export_name(arg->value, pe)))
+            return comment;
+
+        /* Sometimes we have TWO levels of indirection—call to jmp to
+         * relocated address. mingw-w64 does this. */
+
+        if (read_word(addr2offset(arg->value, pe)) == 0x25ff) /* absolute jmp */
+            return get_imported_name(read_dword(addr2offset(arg->value, pe) + 2), pe);
+
+        if ((comment = relocate_arg(instr, arg, pe)))
+            return comment;
+
+        /* If all else fails, print the address relative to the image base. */
+        snprintf(comment_str, 10, "%lx", pe_rel_addr ? arg->value - pe->imagebase : arg->value);
+        return comment_str;
     }
 
     return NULL;
@@ -136,39 +177,20 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, const st
 
     sprintf(ip_string, "%8lx", absip);
 
+    /* We deal in relative addresses internally everywhere. That means we have
+     * to fix up the values for relative jumps if we're not displaying relative
+     * addresses. */
+    if ((instr.op.arg0 == REL8 || instr.op.arg0 == REL16) && !pe_rel_addr) {
+        instr.args[0].value += pe->imagebase;
+    }
+
     /* Check for relocations and imported names. PE separates the two concepts:
      * imported names are done by jumping into a block in .idata which is
      * relocated, and relocations proper are scattered throughout code sections
      * and relocated according to the contents of .reloc. */
 
-    if (instr.op.opcode == 0xff && (instr.op.subcode == 2 || instr.op.subcode == 4)
-        && instr.modrm_disp == DISP_16 && instr.modrm_reg == -1) {
-        /* call/jmp to an absolute memory address */
-        comment = get_imported_name(instr.args[0].value, pe);
-    }
-
-    /* check if we are referencing a named export */
-    if (instr.op.arg0 == REL16 && !comment)
-    {
-        comment = get_export_name(instr.args[0].value, pe);
-        if (!comment)
-        {
-            /* Sometimes we have TWO levels of indirection—call to jmp to
-             * relocated address. mingw-w64 does this. */
-
-            if (read_word(addr2offset(instr.args[0].value, pe)) == 0x25ff) /* absolute jmp */
-                comment = get_imported_name(read_dword(addr2offset(instr.args[0].value, pe) + 2), pe);
-        }
-    }
-
-    /* Not an import or an export. Is it a regular relocation? If so, adjust the
-     * comment, since we prefer to print addresses relative to the image base. */
-    if (!comment) {
-        if (instr.args[0].type && sec->instr_flags[instr.args[0].ip - sec->address] & INSTR_RELOC)
-            comment = relocate_arg(&instr, &instr.args[0], pe);
-        if (instr.args[1].type && sec->instr_flags[instr.args[1].ip - sec->address] & INSTR_RELOC)
-            comment = relocate_arg(&instr, &instr.args[1], pe);
-    }
+    if (!(comment = get_arg_comment(sec, &instr, &instr.args[0], pe)))
+        comment = get_arg_comment(sec, &instr, &instr.args[1], pe);
 
     /* 64-bit does it with IP-relative addressing. */
     if (!comment && instr.modrm_reg == 16) {
@@ -191,13 +213,6 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, const st
             snprintf(comment_str, 10, "%lx", abstip);
             comment = comment_str;
         }
-    }
-
-    /* We deal in relative addresses internally everywhere. That means we have
-     * to fix up the values for relative jumps if we're not displaying relative
-     * addresses. */
-    if ((instr.op.arg0 == REL8 || instr.op.arg0 == REL16) && !pe_rel_addr) {
-        instr.args[0].value += pe->imagebase;
     }
 
     print_instr(ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment, bits);
@@ -348,6 +363,9 @@ static void scan_segment(dword ip, struct pe *pe) {
                 const struct reloc_pe *r = get_reloc(i + sec->address, pe);
                 struct section *tsec;
                 dword taddr;
+
+                if (!r)
+                    warn_at("Byte tagged INSTR_RELOC has no reloc; this is a bug.\n");
 
                 switch (r->type)
                 {
