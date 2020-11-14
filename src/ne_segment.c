@@ -102,24 +102,31 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
          * offset */
         snprintf(arg->string, sizeof(arg->string), "%d:%04lx", r->tseg, arg->value);
         return get_entry_name(r->tseg, arg->value, ne);
-    } else if (arg->type == IMM && (r->size == 2 || r->size == 5)) {
-        /* imm16 referencing a segment or offset directly */
+    } else if ((arg->type == IMM || arg->type == MEM) && (r->size == 2 || r->size == 5)) {
+        /* imm16 referencing a segment or offset directly; MEM with lea has also
+         * been observed (for some reason) */
         const char *pfx = (r->size == 2 ? "seg " : "");
+        const char *open = "", *close = "";
+        if (arg->type != IMM)
+        {
+            open = "[";
+            close = "]";
+        }
         if (r->type == 0) {
-            snprintf(arg->string, sizeof(arg->string), "%s%d", pfx, r->tseg);
+            snprintf(arg->string, sizeof(arg->string), "%s%s%d%s", open, pfx, r->tseg, close);
             return NULL;
         } else if (r->type == 1) {
-            snprintf(arg->string, sizeof(arg->string), "%s%s.%d", pfx, module, r->toffset);
+            snprintf(arg->string, sizeof(arg->string), "%s%s%s.%d%s", open, pfx, module, r->toffset, close);
             return get_imported_name(r->tseg, r->toffset, ne);
         } else if (r->type == 2) {
-            snprintf(arg->string, sizeof(arg->string), "%s%s.%.*s", pfx, module,
-                ne->nametab[r->toffset], &ne->nametab[r->toffset+1]);
+            snprintf(arg->string, sizeof(arg->string), "%s%s%s.%.*s%s", open, pfx, module,
+                ne->nametab[r->toffset], &ne->nametab[r->toffset+1], close);
             return NULL;
         }
     }
 
-    warn("%#x: unhandled relocation: size %d, type %d, argtype %x\n",
-        arg->ip, r->size, r->type, arg->type);
+    warn("%d:%#x: unhandled relocation: size %d, type %d, argtype %x\n",
+        seg->cs, arg->ip, r->size, r->type, arg->type);
 
     return NULL;
 }
