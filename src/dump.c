@@ -31,6 +31,14 @@
 
 #include "semblance.h"
 
+byte *map;
+
+word mode;
+word opts;
+char **resource_filters;
+unsigned resource_filters_count;
+enum asm_syntax asm_syntax;
+
 static void dump_file(char *file){
     struct stat st;
     word magic;

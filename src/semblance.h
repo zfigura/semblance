@@ -14,7 +14,7 @@ typedef uint16_t word;
 typedef uint32_t dword;
 typedef uint64_t qword;
 
-byte *map;
+extern byte *map;
 
 static inline const void *read_data(off_t offset)
 {
@@ -57,7 +57,7 @@ static inline qword read_qword(off_t offset)
 #define DUMPIMPORT      0x08
 #define DISASSEMBLE     0x10
 #define SPECFILE        0x80
-word mode; /* what to dump */
+extern word mode; /* what to dump */
 
 #define DISASSEMBLE_ALL     0x01
 #define DEMANGLE            0x02
@@ -65,9 +65,10 @@ word mode; /* what to dump */
 #define NO_SHOW_ADDRESSES   0x08
 #define COMPILABLE          0x10
 #define FULL_CONTENTS       0x20
-word opts; /* additional options */
+extern word opts; /* additional options */
 
-enum {
+extern enum asm_syntax
+{
     GAS,
     NASM,
     MASM,
@@ -76,8 +77,8 @@ enum {
 extern const char *const rsrc_types[];
 extern const size_t rsrc_types_count;
 
-char **resource_filters;
-unsigned resource_filters_count;
+extern char **resource_filters;
+extern unsigned resource_filters_count;
 
 /* Whether to print addresses relative to the image base for PE files. */
 extern int pe_rel_addr;
