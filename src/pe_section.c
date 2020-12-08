@@ -481,8 +481,11 @@ void read_sections(struct pe *pe) {
         }
     }
 
-    for (i = 0; i < pe->export_count; i++) {
+    for (i = 0; i < pe->export_count; i++)
+    {
         dword address = pe->exports[i].address;
+        if (!address)
+            continue;
         struct section *sec = addr2section(address, pe);
         if (!sec)
         {
