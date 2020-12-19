@@ -84,7 +84,7 @@ static const char *get_imported_name(dword offset, const struct pe *pe) {
         {
             if (module->nametab[index].is_ordinal)
             {
-                sprintf(comment, "%s.%u\n", module->module, module->nametab[index].ordinal);
+                sprintf(comment, "%s.%u", module->module, module->nametab[index].ordinal);
                 return comment;
             }
             return module->nametab[index].name;
