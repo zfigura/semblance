@@ -135,6 +135,28 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
     if (arg->type == REL8 || arg->type == REL16)
         return NULL;
 
+    if (instr->modrm_reg == 16)
+    {
+        dword tip;
+        qword abstip;
+
+        if (arg->type >= RM && arg->type <= MEM)
+            tip = end_ip + arg->value;
+        else
+            tip = end_ip + arg->value;
+        abstip = tip;
+        if (!pe_rel_addr) abstip += pe->imagebase;
+
+        if ((comment = get_imported_name(tip + pe->imagebase, pe)))
+            return comment;
+
+        if ((comment = get_export_name(tip, pe)))
+            return comment;
+
+        snprintf(comment_str, 10, "%lx", abstip);
+        return comment_str;
+    }
+
     /* Relocate anything that points inside the image's address space or that
      * has a relocation entry. */
     if (addr2section(arg->value - pe->imagebase, pe) || (sec->instr_flags[arg->ip - sec->address] & INSTR_RELOC))
@@ -152,28 +174,6 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
 
         if ((comment = relocate_arg(instr, arg, pe)))
             return comment;
-
-        if (instr->modrm_reg == 16)
-        {
-            dword tip;
-            qword abstip;
-
-            if (arg->type >= RM && arg->type <= MEM)
-                tip = end_ip + arg->value;
-            else
-                tip = end_ip + arg->value;
-            abstip = tip;
-            if (!pe_rel_addr) abstip += pe->imagebase;
-
-            if ((comment = get_imported_name(tip + pe->imagebase, pe)))
-                return comment;
-
-            if ((comment = get_export_name(tip, pe)))
-                return comment;
-
-            snprintf(comment_str, 10, "%lx", abstip);
-            return comment_str;
-        }
 
         /* If all else fails, print the address relative to the image base. */
         snprintf(comment_str, 10, "%lx", pe_rel_addr ? arg->value - pe->imagebase : arg->value);
