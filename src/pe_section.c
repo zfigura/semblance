@@ -190,7 +190,6 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, const st
     char ip_string[17];
     qword absip = ip;
     int bits = (pe->magic == 0x10b) ? 32 : 64;
-    char comment_str[10];
 
     if (!pe_rel_addr)
         absip += pe->imagebase;
