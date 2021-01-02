@@ -135,15 +135,12 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
     if (arg->type == REL8 || arg->type == REL16)
         return NULL;
 
-    if (instr->modrm_reg == 16)
+    if (instr->modrm_reg == 16 && arg->type >= RM && arg->type <= MEM)
     {
         dword tip;
         qword abstip;
 
-        if (arg->type >= RM && arg->type <= MEM)
-            tip = end_ip + arg->value;
-        else
-            tip = end_ip + arg->value;
+        tip = end_ip + arg->value;
         abstip = tip;
         if (!pe_rel_addr) abstip += pe->imagebase;
 
