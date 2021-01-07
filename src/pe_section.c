@@ -168,7 +168,11 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
 
         if (tsec && rel_value < tsec->address + tsec->length
                 && read_word(addr2offset(rel_value, pe)) == 0x25ff) /* absolute jmp */
-            return get_imported_name(read_dword(addr2offset(rel_value, pe) + 2), pe);
+        {
+            rel_value = read_dword(addr2offset(rel_value, pe) + 2);
+            if (!pe_rel_addr) rel_value -= pe->imagebase;
+            return get_imported_name(rel_value, pe);
+        }
 
         if ((comment = relocate_arg(instr, arg, pe)))
             return comment;
