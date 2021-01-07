@@ -124,6 +124,7 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
         const struct instr *instr, const struct arg *arg, const struct pe *pe)
 {
     static char comment_str[10];
+    struct section *tsec;
     const char *comment;
     qword rel_value;
 
@@ -155,7 +156,7 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
 
     /* Relocate anything that points inside the image's address space or that
      * has a relocation entry. */
-    if (addr2section(rel_value, pe) || (sec->instr_flags[arg->ip - sec->address] & INSTR_RELOC))
+    if ((tsec = addr2section(rel_value, pe)) || (sec->instr_flags[arg->ip - sec->address] & INSTR_RELOC))
     {
         if ((comment = get_imported_name(rel_value, pe)))
             return comment;
@@ -165,7 +166,8 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
         /* Sometimes we have TWO levels of indirection—call to jmp to
          * relocated address. mingw-w64 does this. */
 
-        if (read_word(addr2offset(rel_value, pe)) == 0x25ff) /* absolute jmp */
+        if (tsec && rel_value < tsec->address + tsec->length
+                && read_word(addr2offset(rel_value, pe)) == 0x25ff) /* absolute jmp */
             return get_imported_name(read_dword(addr2offset(rel_value, pe) + 2), pe);
 
         if ((comment = relocate_arg(instr, arg, pe)))
