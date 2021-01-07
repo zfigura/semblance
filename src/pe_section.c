@@ -343,15 +343,21 @@ static void scan_segment(dword ip, struct pe *pe) {
 
             if (tsec)
             {
-                dword trelip = instr.args[0].value - tsec->address;
+                if (tsec->flags & 0x20)
+                {
+                    dword trelip = instr.args[0].value - tsec->address;
 
-                if (!strcmp(instr.op.name, "call"))
-                    tsec->instr_flags[trelip] |= INSTR_FUNC;
+                    if (!strcmp(instr.op.name, "call"))
+                        tsec->instr_flags[trelip] |= INSTR_FUNC;
+                    else
+                        tsec->instr_flags[trelip] |= INSTR_JUMP;
+
+                    /* scan it */
+                    scan_segment(instr.args[0].value, pe);
+                }
                 else
-                    tsec->instr_flags[trelip] |= INSTR_JUMP;
-    
-                /* scan it */
-                scan_segment(instr.args[0].value, pe);
+                    warn_at("Branch '%s' to byte %lx in non-code section %s.\n",
+                            instr.op.name, instr.args[0].value, tsec->name);
             } else
                 warn_at("Branch '%s' to byte %lx not in image.\n", instr.op.name, instr.args[0].value);
         }
