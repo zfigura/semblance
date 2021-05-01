@@ -544,7 +544,10 @@ void readne(off_t offset_ne, struct ne *ne) {
     /* read our various tables */
     get_entry_table(offset_ne + ne->header.ne_enttab, ne);
     ne->name = read_res_name_table(offset_ne + ne->header.ne_restab, ne->enttab);
-    ne->description = read_res_name_table(ne->header.ne_nrestab, ne->enttab);
+    if (ne->header.ne_nrestab)
+        ne->description = read_res_name_table(ne->header.ne_nrestab, ne->enttab);
+    else
+        ne->description = NULL;
     ne->nametab = read_data(offset_ne + ne->header.ne_imptab);
     get_import_module_table(offset_ne + ne->header.ne_modtab, ne);
     read_segments(offset_ne + ne->header.ne_segtab, ne);
@@ -591,7 +594,8 @@ void dumpne(long offset_ne) {
 
     printf("Module type: NE (New Executable)\n");
     printf("Module name: %s\n", ne.name);
-    printf("Module description: %s\n", ne.description);
+    if (ne.description)
+        printf("Module description: %s\n", ne.description);
 
     if (mode & DUMPHEADER)
         print_header(&ne.header);
