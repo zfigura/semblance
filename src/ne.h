@@ -103,7 +103,7 @@ struct ne {
     struct segment *segments;
 };
 
-extern void readne(long offset_ne, struct ne *ne);
+extern void readne(off_t offset_ne, struct ne *ne);
 extern void freene(struct ne *ne);
 
 /* in ne_resource.c */
