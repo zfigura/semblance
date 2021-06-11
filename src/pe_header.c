@@ -415,7 +415,7 @@ void freepe(struct pe *pe) {
     free(pe->imports);
 }
 
-void dumppe(long offset_pe) {
+void dumppe(off_t offset_pe) {
     struct pe pe = {0};
     int i, j;
 

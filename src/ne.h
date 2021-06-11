@@ -76,7 +76,7 @@ struct reloc {
 
 struct segment {
     word cs;
-    long start;
+    off_t start;
     word length;
     word flags;
     word min_alloc;

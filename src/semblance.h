@@ -85,7 +85,7 @@ extern int pe_rel_addr;
 
 /* Entry points */
 void dumpmz(void);
-void dumpne(long offset_ne);
-void dumppe(long offset_pe);
+void dumpne(off_t offset_ne);
+void dumppe(off_t offset_pe);
 
 #endif /* SEMBLANCE_H */

@@ -42,7 +42,7 @@ enum asm_syntax asm_syntax;
 static void dump_file(char *file){
     struct stat st;
     word magic;
-    long offset = 0;
+    off_t offset = 0;
     int fd;
 
     if ((fd = open(file, O_RDONLY)) < 0) {

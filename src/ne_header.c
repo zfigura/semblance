@@ -580,7 +580,7 @@ void freene(struct ne *ne) {
     free_segments(ne);
 }
 
-void dumpne(long offset_ne) {
+void dumpne(off_t offset_ne) {
     struct ne ne;
     int i;
 
