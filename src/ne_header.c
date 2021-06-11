@@ -538,7 +538,7 @@ static void get_import_module_table(off_t start, struct ne *ne)
     }
 }
 
-void readne(off_t offset_ne, struct ne *ne) {
+static void readne(off_t offset_ne, struct ne *ne) {
     memcpy(&ne->header, read_data(offset_ne), sizeof(ne->header));
 
     /* read our various tables */
@@ -553,7 +553,7 @@ void readne(off_t offset_ne, struct ne *ne) {
     read_segments(offset_ne + ne->header.ne_segtab, ne);
 }
 
-void freene(struct ne *ne) {
+static void freene(struct ne *ne) {
     int i, j;
 
     free(ne->name);
