@@ -183,7 +183,7 @@ static const struct op instructions[256] = {
     {0x97, 8, -1, "xchg",       AX,     DI},
     {0x98, 8, -1, "cbw"},       /* handled separately */
     {0x99, 8, -1, "cwd"},       /* handled separately */
-    {0x9A, 8, -1, "call",       PTR32,  0,      OP_FAR},
+    {0x9A, 8, -1, "call",       SEGPTR, 0,      OP_FAR},
     {0x9B, 8,  0, "wait"},  /* wait ~prefix~ */
     {0x9C, 8, -1, "pushf",      0,      0,      OP_STACK},
     {0x9D, 8, -1, "popf",       0,      0,      OP_STACK},
@@ -263,7 +263,7 @@ static const struct op instructions[256] = {
     {0xE7, 8, -1, "out",        IMM,    AX},
     {0xE8, 8, -1, "call",       REL,    0,      OP_BRANCH},
     {0xE9, 8, -1, "jmp",        REL,    0,      OP_BRANCH|OP_STOP},
-    {0xEA, 8, -1, "jmp",        PTR32,  0,      OP_FAR|OP_STOP},    /* a change in bitness should only happen across segment boundaries */
+    {0xEA, 8, -1, "jmp",        SEGPTR, 0,      OP_FAR|OP_STOP},    /* a change in bitness should only happen across segment boundaries */
     {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
     {0xEC, 8,  8, "in",         AL,     DXS},
     {0xED, 8, -1, "in",         AX,     DXS},
@@ -442,7 +442,7 @@ static const struct op instructions64[256] = {
     {0x97, 8, -1, "xchg",       AX,     DI},
     {0x98, 8, -1, "cbw"},       /* handled separately */
     {0x99, 8, -1, "cwd"},       /* handled separately */
-    {0x9A, 8},  /* undefined (was call PTR32) */
+    {0x9A, 8},  /* undefined (was call SEGPTR) */
     {0x9B, 8,  0, "wait"},  /* wait ~prefix~ */
     {0x9C, 8, -1, "pushf",      0,      0,      OP_STACK},
     {0x9D, 8, -1, "popf",       0,      0,      OP_STACK},
@@ -522,7 +522,7 @@ static const struct op instructions64[256] = {
     {0xE7, 8, -1, "out",        IMM,    AX},
     {0xE8, 8, -1, "call",       REL,    0,      OP_BRANCH},
     {0xE9, 8, -1, "jmp",        REL,    0,      OP_BRANCH|OP_STOP},
-    {0xEA, 8},  /* undefined (was jmp/PTR32) */
+    {0xEA, 8},  /* undefined (was jmp/SEGPTR) */
     {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
     {0xEC, 8,  8, "in",         AL,     DXS},
     {0xED, 8, -1, "in",         AX,     DXS},
@@ -1655,7 +1655,7 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
             arg->value = (ip+4+*((dword *) p)) & 0xffffffff;
             return 4;
         }
-    case PTR32:
+    case SEGPTR:
         arg->ip = ip;
         if (instr->op.size == 16) {
             arg->value = *((word *) p);
@@ -1918,7 +1918,7 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
     case REL:
         sprintf(out, "%04lx", value);
         break;
-    case PTR32:
+    case SEGPTR:
         /* should always be relocated */
         break;
     case MOFFS:

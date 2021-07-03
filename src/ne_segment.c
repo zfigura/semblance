@@ -75,7 +75,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
     const struct reloc *r = get_reloc(seg, arg->ip);
     char *module = NULL;
 
-    if (!r && arg->type == PTR32) r = get_reloc(seg, arg->ip+2);
+    if (!r && arg->type == SEGPTR) r = get_reloc(seg, arg->ip+2);
     if (!r) {
         warn("%#x: Byte tagged INSTR_RELOC has no reloc attached; this is a bug.\n", arg->ip);
         return "?";
@@ -84,7 +84,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
     if (r->type == 1 || r->type == 2)
         module = ne->imptab[r->tseg-1].name;
 
-    if (arg->type == PTR32 && r->size == 3) {
+    if (arg->type == SEGPTR && r->size == 3) {
         /* 32-bit relocation on 32-bit pointer, so just copy the name */
         if (r->type == 0) {
             snprintf(arg->string, sizeof(arg->string), "%d:%04x", r->tseg, r->toffset);
@@ -97,7 +97,7 @@ static const char *relocate_arg(const struct segment *seg, struct arg *arg, cons
                 ne->nametab[r->toffset], &ne->nametab[r->toffset+1]);
             return NULL;
         }
-    } else if (arg->type == PTR32 && r->size == 2 && r->type == 0) {
+    } else if (arg->type == SEGPTR && r->size == 2 && r->type == 0) {
         /* segment relocation on 32-bit pointer; copy the segment but keep the
          * offset */
         snprintf(arg->string, sizeof(arg->string), "%d:%04lx", r->tseg, arg->value);
@@ -150,8 +150,8 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, const str
         comment = relocate_arg(seg, &instr.args[0], ne);
     if (seg->instr_flags[instr.args[1].ip] & INSTR_RELOC)
         comment = relocate_arg(seg, &instr.args[1], ne);
-    /* make sure to check for PTR32 segment-only relocations */
-    if (instr.op.arg0 == PTR32 && seg->instr_flags[instr.args[0].ip+2] & INSTR_RELOC)
+    /* make sure to check for SEGPTR segment-only relocations */
+    if (instr.op.arg0 == SEGPTR && seg->instr_flags[instr.args[0].ip+2] & INSTR_RELOC)
         comment = relocate_arg(seg, &instr.args[0], ne);
 
     /* check if we are referencing a named export */
@@ -263,7 +263,7 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
         if (i < ip+instr_length && i == seg->min_alloc) break;
 
         /* handle conditional and unconditional jumps */
-        if (instr.op.arg0 == PTR32) {
+        if (instr.op.arg0 == SEGPTR) {
             for (i = ip; i < ip+instr_length; i++) {
                 if (seg->instr_flags[i] & INSTR_RELOC) {
                     const struct reloc *r = get_reloc(seg, i);
