@@ -307,8 +307,7 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
             }
             else
             {
-                /* Wine generates invalid code for its builtins */
-                warn_at("Invalid relative call or jump to %#x (segment size %#x).\n",
+                warn_at("Invalid relative call or jump to %#lx (segment size %#x).\n",
                         instr.args[0].value, seg->min_alloc);
             }
 
