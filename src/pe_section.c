@@ -178,7 +178,7 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
             return comment;
 
         /* Don't print any comment for mundane relative jumps or calls. */
-        if (arg->type == REL8 || arg->type == REL16)
+        if (arg->type == REL8 || arg->type == REL)
             return NULL;
 
         /* If all else fails, print the address relative to the image base. */
@@ -207,7 +207,7 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, const st
     /* We deal in relative addresses internally everywhere. That means we have
      * to fix up the values for relative jumps if we're not displaying relative
      * addresses. */
-    if ((instr.op.arg0 == REL8 || instr.op.arg0 == REL16) && !pe_rel_addr) {
+    if ((instr.op.arg0 == REL8 || instr.op.arg0 == REL) && !pe_rel_addr) {
         instr.args[0].value += pe->imagebase;
     }
 

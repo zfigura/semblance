@@ -261,8 +261,8 @@ static const struct op instructions[256] = {
     {0xE5, 8, -1, "in",         AX,     IMM},
     {0xE6, 8,  8, "out",        IMM,    AL},
     {0xE7, 8, -1, "out",        IMM,    AX},
-    {0xE8, 8, -1, "call",       REL16,  0,      OP_BRANCH},
-    {0xE9, 8, -1, "jmp",        REL16,  0,      OP_BRANCH|OP_STOP},
+    {0xE8, 8, -1, "call",       REL,    0,      OP_BRANCH},
+    {0xE9, 8, -1, "jmp",        REL,    0,      OP_BRANCH|OP_STOP},
     {0xEA, 8, -1, "jmp",        PTR32,  0,      OP_FAR|OP_STOP},    /* a change in bitness should only happen across segment boundaries */
     {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
     {0xEC, 8,  8, "in",         AL,     DXS},
@@ -520,8 +520,8 @@ static const struct op instructions64[256] = {
     {0xE5, 8, -1, "in",         AX,     IMM},
     {0xE6, 8,  8, "out",        IMM,    AL},
     {0xE7, 8, -1, "out",        IMM,    AX},
-    {0xE8, 8, -1, "call",       REL16,  0,      OP_BRANCH},
-    {0xE9, 8, -1, "jmp",        REL16,  0,      OP_BRANCH|OP_STOP},
+    {0xE8, 8, -1, "call",       REL,    0,      OP_BRANCH},
+    {0xE9, 8, -1, "jmp",        REL,    0,      OP_BRANCH|OP_STOP},
     {0xEA, 8},  /* undefined (was jmp/PTR32) */
     {0xEB, 8,  0, "jmp",        REL8,   0,      OP_BRANCH|OP_STOP},
     {0xEC, 8,  8, "in",         AL,     DXS},
@@ -732,22 +732,22 @@ static const struct op instructions_0F[] = {
     {0x4E, 8, -1, "cmovle",     REG,    RM},
     {0x4F, 8, -1, "cmovg",      REG,    RM},
 
-    {0x80, 8, -1, "jo",         REL16,  0,      OP_BRANCH},
-    {0x81, 8, -1, "jno",        REL16,  0,      OP_BRANCH},
-    {0x82, 8, -1, "jb",         REL16,  0,      OP_BRANCH},
-    {0x83, 8, -1, "jae",        REL16,  0,      OP_BRANCH},
-    {0x84, 8, -1, "jz",         REL16,  0,      OP_BRANCH},
-    {0x85, 8, -1, "jnz",        REL16,  0,      OP_BRANCH},
-    {0x86, 8, -1, "jbe",        REL16,  0,      OP_BRANCH},
-    {0x87, 8, -1, "ja",         REL16,  0,      OP_BRANCH},
-    {0x88, 8, -1, "js",         REL16,  0,      OP_BRANCH},
-    {0x89, 8, -1, "jns",        REL16,  0,      OP_BRANCH},
-    {0x8A, 8, -1, "jp",         REL16,  0,      OP_BRANCH},
-    {0x8B, 8, -1, "jnp",        REL16,  0,      OP_BRANCH},
-    {0x8C, 8, -1, "jl",         REL16,  0,      OP_BRANCH},
-    {0x8D, 8, -1, "jge",        REL16,  0,      OP_BRANCH},
-    {0x8E, 8, -1, "jle",        REL16,  0,      OP_BRANCH},
-    {0x8F, 8, -1, "jg",         REL16,  0,      OP_BRANCH},
+    {0x80, 8, -1, "jo",         REL,    0,      OP_BRANCH},
+    {0x81, 8, -1, "jno",        REL,    0,      OP_BRANCH},
+    {0x82, 8, -1, "jb",         REL,    0,      OP_BRANCH},
+    {0x83, 8, -1, "jae",        REL,    0,      OP_BRANCH},
+    {0x84, 8, -1, "jz",         REL,    0,      OP_BRANCH},
+    {0x85, 8, -1, "jnz",        REL,    0,      OP_BRANCH},
+    {0x86, 8, -1, "jbe",        REL,    0,      OP_BRANCH},
+    {0x87, 8, -1, "ja",         REL,    0,      OP_BRANCH},
+    {0x88, 8, -1, "js",         REL,    0,      OP_BRANCH},
+    {0x89, 8, -1, "jns",        REL,    0,      OP_BRANCH},
+    {0x8A, 8, -1, "jp",         REL,    0,      OP_BRANCH},
+    {0x8B, 8, -1, "jnp",        REL,    0,      OP_BRANCH},
+    {0x8C, 8, -1, "jl",         REL,    0,      OP_BRANCH},
+    {0x8D, 8, -1, "jge",        REL,    0,      OP_BRANCH},
+    {0x8E, 8, -1, "jle",        REL,    0,      OP_BRANCH},
+    {0x8F, 8, -1, "jg",         REL,    0,      OP_BRANCH},
     {0x90, 0,  8, "seto",       RM},
     {0x91, 0,  8, "setno",      RM},
     {0x92, 0,  8, "setb",       RM},
@@ -1596,7 +1596,7 @@ static int get_0f_instr(const byte *p, struct instr *instr) {
 
 /* Parameters:
  * ip      - [i] NOT current IP, but rather IP of the *argument*. This
- *               is necessary for REL16 to work right.
+ *               is necessary for REL to work right.
  * p       - [i] pointer to the current argument to be parsed
  * arg     - [i/o] pointer to the relevant arg struct
  *      ->ip         [o]
@@ -1645,7 +1645,7 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         arg->ip = ip;
         arg->value = ip+1+*((int8_t *) p);  /* signed */
         return 1;
-    case REL16:
+    case REL:
         arg->ip = ip;
         /* Equivalently signed or unsigned (i.e. clipped) */
         if (instr->op.size == 16) {
@@ -1910,7 +1910,7 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
         }
         break;
     case REL8:
-    case REL16:
+    case REL:
         sprintf(out, "%04lx", value);
         break;
     case PTR32:

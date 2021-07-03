@@ -18,7 +18,7 @@ enum argtype {
 
     /* absolute or relative numbers, given as 1/2/4 bytes */
     IMM8, IMM16, IMM,   /* immediate number */
-    REL8, REL16,        /* relative to current instruction */
+    REL8, REL,          /* relative to current instruction */
     PTR32,      /* absolute instruction, used for far calls/jumps */
     MOFFS,      /* absolute location in memory, for A0-A3 MOV */
 

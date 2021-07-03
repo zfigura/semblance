@@ -155,7 +155,7 @@ static int print_ne_instr(const struct segment *seg, word ip, byte *p, const str
         comment = relocate_arg(seg, &instr.args[0], ne);
 
     /* check if we are referencing a named export */
-    if (!comment && instr.op.arg0 == REL16)
+    if (!comment && instr.op.arg0 == REL)
         comment = get_entry_name(cs, instr.args[0].value, ne);
 
     print_instr(ip_string, p, len, seg->instr_flags[ip], &instr, comment, bits);
