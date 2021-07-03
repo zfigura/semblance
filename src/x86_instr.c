@@ -1607,7 +1607,7 @@ static int get_0f_instr(const byte *p, struct instr *instr) {
  *      ->op         [i]
  *      ->modrm_disp [o]
  *      ->modrm_reg  [o]
- * is32    - [i] bitness—REL16 and MOFFS16 are affected by bitness but can't be overridden
+ * bits    - [i] bitness—MOFFS16 is affected by bitness but can't be overridden
  *
  * Returns: number of bytes processed
  *
@@ -1648,7 +1648,7 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
     case REL16:
         arg->ip = ip;
         /* Equivalently signed or unsigned (i.e. clipped) */
-        if (bits == 16) {
+        if (instr->op.size == 16) {
             arg->value = (ip+2+*((word *) p)) & 0xffff;
             return 2;
         } else {
