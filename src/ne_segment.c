@@ -297,10 +297,20 @@ static void scan_segment(word cs, word ip, struct ne *ne) {
             }
         } else if (instr.op.flags & OP_BRANCH) {
             /* near relative jump, loop, or call */
-            if (!strcmp(instr.op.name, "call"))
-                seg->instr_flags[instr.args[0].value] |= INSTR_FUNC;
+
+            if (instr.args[0].value < seg->min_alloc)
+            {
+                if (!strcmp(instr.op.name, "call"))
+                    seg->instr_flags[instr.args[0].value] |= INSTR_FUNC;
+                else
+                    seg->instr_flags[instr.args[0].value] |= INSTR_JUMP;
+            }
             else
-                seg->instr_flags[instr.args[0].value] |= INSTR_JUMP;
+            {
+                /* Wine generates invalid code for its builtins */
+                warn_at("Invalid relative call or jump to %#x (segment size %#x).\n",
+                        instr.args[0].value, seg->min_alloc);
+            }
 
             /* scan it */
             scan_segment(cs, instr.args[0].value, ne);
