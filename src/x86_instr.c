@@ -1607,7 +1607,7 @@ static int get_0f_instr(const byte *p, struct instr *instr) {
  *      ->op         [i]
  *      ->modrm_disp [o]
  *      ->modrm_reg  [o]
- * bits    - [i] bitness—MOFFS16 is affected by bitness but can't be overridden
+ * bits    - [i] bitness
  *
  * Returns: number of bytes processed
  *
@@ -1661,10 +1661,10 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         return 4;
     case MOFFS16:
         arg->ip = ip;
-        if (bits == 64) {
+        if (instr->addrsize == 64) {
             arg->value = *((qword *) p);
             return 8;
-        } else if (bits == 32) {
+        } else if (instr->addrsize == 32) {
             arg->value = *((dword *) p);
             return 4;
         } else {
