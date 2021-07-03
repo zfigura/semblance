@@ -111,7 +111,7 @@ static char *relocate_arg(const struct instr *instr, const struct arg *arg, cons
     if (r->type == 0)
         return NULL;    /* not even a real relocation, just padding */
     else if (r->type == 3) {
-        if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == -1) || arg->type == MOFFS16) {
+        if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == -1) || arg->type == MOFFS) {
             snprintf(comment, 10, "%lx", pe_rel_addr ? arg->value - pe->opt32->ImageBase : arg->value);
             return comment;
         }

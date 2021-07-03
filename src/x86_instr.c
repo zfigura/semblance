@@ -189,10 +189,10 @@ static const struct op instructions[256] = {
     {0x9D, 8, -1, "popf",       0,      0,      OP_STACK},
     {0x9E, 8,  0, "sahf"},
     {0x9F, 8,  0, "lahf"},
-    {0xA0, 8,  8, "mov",        AL,     MOFFS16},
-    {0xA1, 8, -1, "mov",        AX,     MOFFS16},
-    {0xA2, 8,  8, "mov",        MOFFS16,AL},
-    {0xA3, 8, -1, "mov",        MOFFS16,AX},
+    {0xA0, 8,  8, "mov",        AL,     MOFFS},
+    {0xA1, 8, -1, "mov",        AX,     MOFFS},
+    {0xA2, 8,  8, "mov",        MOFFS,  AL},
+    {0xA3, 8, -1, "mov",        MOFFS,  AX},
     {0xA4, 8,  8, "movs",       DSSI,   ESDI,   OP_STRING|OP_REP},
     {0xA5, 8, -1, "movs",       DSSI,   ESDI,   OP_STRING|OP_REP},
     {0xA6, 8,  8, "cmps",       DSSI,   ESDI,   OP_STRING|OP_REPNE|OP_REPE},
@@ -448,10 +448,10 @@ static const struct op instructions64[256] = {
     {0x9D, 8, -1, "popf",       0,      0,      OP_STACK},
     {0x9E, 8,  0, "sahf"},
     {0x9F, 8,  0, "lahf"},
-    {0xA0, 8,  8, "mov",        AL,     MOFFS16},
-    {0xA1, 8, -1, "mov",        AX,     MOFFS16},
-    {0xA2, 8,  8, "mov",        MOFFS16,AL},
-    {0xA3, 8, -1, "mov",        MOFFS16,AX},
+    {0xA0, 8,  8, "mov",        AL,     MOFFS},
+    {0xA1, 8, -1, "mov",        AX,     MOFFS},
+    {0xA2, 8,  8, "mov",        MOFFS,  AL},
+    {0xA3, 8, -1, "mov",        MOFFS,  AX},
     {0xA4, 8,  8, "movs",       DSSI,   ESDI,   OP_STRING|OP_REP},
     {0xA5, 8, -1, "movs",       DSSI,   ESDI,   OP_STRING|OP_REP},
     {0xA6, 8,  8, "cmps",       DSSI,   ESDI,   OP_STRING|OP_REPNE|OP_REPE},
@@ -1659,7 +1659,7 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         arg->ip = ip;
         arg->value = *((word *) p); /* I think this should be enough */
         return 4;
-    case MOFFS16:
+    case MOFFS:
         arg->ip = ip;
         if (instr->addrsize == 64) {
             arg->value = *((qword *) p);
@@ -1916,7 +1916,7 @@ static void print_arg(char *ip, struct instr *instr, int i, int bits) {
     case PTR32:
         /* should always be relocated */
         break;
-    case MOFFS16:
+    case MOFFS:
         if (asm_syntax == GAS) {
             if (instr->prefix & PREFIX_SEG_MASK) {
                 get_seg16(out, (instr->prefix & PREFIX_SEG_MASK)-1);

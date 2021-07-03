@@ -20,7 +20,7 @@ enum argtype {
     IMM8, IMM16, IMM,   /* immediate number */
     REL8, REL16,        /* relative to current instruction */
     PTR32,      /* absolute instruction, used for far calls/jumps */
-    MOFFS16,    /* absolute location in memory, for A0-A3 MOV */
+    MOFFS,      /* absolute location in memory, for A0-A3 MOV */
 
     /* specific memory addresses for string operations */
     DSBX, DSSI, ESDI,
