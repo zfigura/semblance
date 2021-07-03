@@ -183,7 +183,7 @@ static const struct op instructions[256] = {
     {0x97, 8, -1, "xchg",       AX,     DI},
     {0x98, 8, -1, "cbw"},       /* handled separately */
     {0x99, 8, -1, "cwd"},       /* handled separately */
-    {0x9A, 8,  0, "call",       PTR32,  0,      OP_FAR},
+    {0x9A, 8, -1, "call",       PTR32,  0,      OP_FAR},
     {0x9B, 8,  0, "wait"},  /* wait ~prefix~ */
     {0x9C, 8, -1, "pushf",      0,      0,      OP_STACK},
     {0x9D, 8, -1, "popf",       0,      0,      OP_STACK},
@@ -1657,8 +1657,13 @@ static int get_arg(dword ip, const byte *p, struct arg *arg, struct instr *instr
         }
     case PTR32:
         arg->ip = ip;
-        arg->value = *((word *) p); /* I think this should be enough */
-        return 4;
+        if (instr->op.size == 16) {
+            arg->value = *((word *) p);
+            return 4;
+        } else {
+            arg->value = *((dword *) p);
+            return 6;
+        }
     case MOFFS:
         arg->ip = ip;
         if (instr->addrsize == 64) {
