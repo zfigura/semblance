@@ -678,8 +678,11 @@ static void print_rsrc_strings(off_t offset, off_t end)
          * However, at least one application (msbsolar) has NEs with what
          * appears to be a non-zero-terminated string. In Windows this is cut
          * off at one minus the given length, just like other strings, so
-         * we'll do that here. */
-        print_escaped_string(offset, length - 1);
+         * we'll do that here.
+         *
+         * And another file has a zero length here. How do compilers screw this
+         * up so badly? */
+        print_escaped_string(offset, length ? length - 1 : 0);
         offset += length;
         offset = (offset + 3) & ~3;
         putchar('\n');
