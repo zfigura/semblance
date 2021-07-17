@@ -256,7 +256,7 @@ static const struct op instructions[256] = {
     {0xE0, 8,  0, "loopnz",     REL8,   0,      OP_BRANCH},  /* fixme: how to print this? */
     {0xE1, 8,  0, "loopz",      REL8,   0,      OP_BRANCH},
     {0xE2, 8,  0, "loop",       REL8,   0,      OP_BRANCH},
-    {0xE3, 8,  0, "jcxz",       REL8,   0,      OP_BRANCH},  /* name handled separately */
+    {0xE3, 8, -1, "jcxz",       REL8,   0,      OP_BRANCH},  /* name handled separately */
     {0xE4, 8,  8, "in",         AL,     IMM},
     {0xE5, 8, -1, "in",         AX,     IMM},
     {0xE6, 8,  8, "out",        IMM,    AL},
@@ -515,7 +515,7 @@ static const struct op instructions64[256] = {
     {0xE0, 8,  0, "loopnz",     REL8,   0,      OP_BRANCH},  /* fixme: how to print this? */
     {0xE1, 8,  0, "loopz",      REL8,   0,      OP_BRANCH},
     {0xE2, 8,  0, "loop",       REL8,   0,      OP_BRANCH},
-    {0xE3, 8,  0, "jcxz",       REL8,   0,      OP_BRANCH},  /* name handled separately */
+    {0xE3, 8, -1, "jcxz",       REL8,   0,      OP_BRANCH},  /* name handled separately */
     {0xE4, 8,  8, "in",         AL,     IMM},
     {0xE5, 8, -1, "in",         AX,     IMM},
     {0xE6, 8,  8, "out",        IMM,    AL},
