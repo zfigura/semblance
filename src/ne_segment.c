@@ -429,10 +429,14 @@ static void read_reloc(const struct segment *seg, word index, struct ne *ne)
 
         next = read_word(seg->start + offset_cursor);
         if (type & 4)
+        {
+            if (!next)
+                break;
             offset_cursor += next;
+        }
         else
             offset_cursor = next;
-    } while (next < 0xFFFb);
+    } while (next < 0xfffb);
 
     r->offsets = malloc(r->offset_count*sizeof(word *));
 
@@ -448,10 +452,14 @@ static void read_reloc(const struct segment *seg, word index, struct ne *ne)
 
         next = read_word(seg->start + offset_cursor);
         if (type & 4)
+        {
+            if (!next)
+                break;
             offset_cursor += next;
+        }
         else
             offset_cursor = next;
-    } while (next < 0xFFFb);
+    } while (next < 0xfffb);
 }
 
 static void free_reloc(struct reloc *reloc_data, word reloc_count) {
