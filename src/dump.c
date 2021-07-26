@@ -72,6 +72,12 @@ static void dump_file(char *file){
     }
 
     offset = read_dword(0x3c);
+    if (offset >= st.st_size)
+    {
+        dumpmz();
+        return;
+    }
+
     magic = read_word(offset);
 
     if (magic == 0x4550) /* PE */
