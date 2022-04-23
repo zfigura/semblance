@@ -332,6 +332,9 @@ static void print_segment_flags(word flags) {
     else
         strcpy(buffer, "code");
 
+    /* The flags used here come mostly from a Microsoft header, newexe.h, which
+     * is shipped with the XP DDK. */
+
     /* I think these three should never occur in a file */
     if (flags & 0x0002) strcat(buffer, ", allocated");
     if (flags & 0x0004) strcat(buffer, ", loaded");
@@ -342,14 +345,16 @@ static void print_segment_flags(word flags) {
     if (flags & 0x0040) strcat(buffer, ", preload");
     if (flags & 0x0080) strcat(buffer, (flags & 0x0001) ? ", read-only" : ", execute-only");
     if (flags & 0x0100) strcat(buffer, ", has relocation data");
+    if (flags & 0x0200) strcat(buffer, ", has debug info");
+    sprintf(buffer + strlen(buffer), ", ring %u", (flags >> 10) & 3);
 
-    /* there's still an unidentified flag 0x0400 which appears in all of my testcases.
-     * but WINE doesn't know what it is, so... */
-    if (flags & 0x0800) strcat(buffer, ", self-loading");
+    /* wine claims 0x0800 is "NE_SEGFLAGS_SELFLOAD", but it never interprets
+     * that flag, there's already one in the file header, and I can't find
+     * reference to it anywhere else. */
     if (flags & 0x1000) strcat(buffer, ", discardable");
     if (flags & 0x2000) strcat(buffer, ", 32-bit");
 
-    if (flags & 0xc608) sprintf(buffer+strlen(buffer), ", (unknown flags 0x%04x)", flags & 0xc608);
+    if (flags & 0xc000) sprintf(buffer+strlen(buffer), ", (unknown flags 0x%04x)", flags & 0xc000);
     printf("    Flags: 0x%04x (%s)\n", flags, buffer);
 }
 
