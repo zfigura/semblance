@@ -149,14 +149,26 @@ static const char *const rsrc_bmp_compression[] = {
 };
 
 static void print_rsrc_flags(word flags){
+    if (flags & 0x0004)
+        printf(", loaded"); /* should be runtime only... */
     if (flags & 0x0010)
         printf(", moveable");
     if (flags & 0x0020)
         printf(", shareable");
     if (flags & 0x0040)
         printf(", preloaded");
-    if (flags & 0xff8f)
-        printf(", (unknown flags 0x%04x)", flags & 0xff8f);
+    if (flags & 0x0200)
+        printf(", compressed"); /* no idea what this means */
+    /* all resources I can find have the 0x0c00 bits set, and I can't find any
+     * reference for what those mean.
+     * there's a comment in newexe.h about how resource flags "ideally" match
+     * segment flags, though, and 0x0c00 is "ring 3". that's nonsensical for
+     * resources, but it's not out of the question that microsoft's compiler
+     * just set those bits for both... */
+    if (flags & 0x1000)
+        printf(", discardable");
+    if (flags & 0xed8b)
+        printf(", (unknown flags 0x%04x)", flags & 0xed8b);
 }
 
 /* There are a lot of styles here and most of them would require longer
@@ -1047,8 +1059,8 @@ struct resource {
     word length;
     word flags;
     word id;
-    word handle; /* fixme: what is this? */
-    word usage; /* fixme: what is this? */
+    word handle; /* runtime only */
+    word usage; /* runtime only */
 };
 
 STATIC_ASSERT(sizeof(struct resource) == 0xc);
