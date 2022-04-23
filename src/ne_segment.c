@@ -402,10 +402,10 @@ static void read_reloc(const struct segment *seg, word index, struct ne *ne)
     }
 
     if (type & ~7)
-        warn("%d: Relocation with unknown type flags %#x.\n", type);
+        warn("%d: Relocation with unknown type flags %#x.\n", seg->cs, type);
 
     if (size != 2 && size != 3 && size != 5)
-        warn("%d: Relocation with unknown size %#x.\n", size);
+        warn("%d: Relocation with unknown size %#x.\n", seg->cs, size);
 
     /* get the offset list */
     offset_cursor = offset;
