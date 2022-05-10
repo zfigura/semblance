@@ -112,7 +112,7 @@ static char *relocate_arg(const struct instr *instr, const struct arg *arg, cons
         return NULL;    /* not even a real relocation, just padding */
     else if (r->type == 3) {
         if (arg->type == IMM || (arg->type == RM && instr->modrm_reg == -1) || arg->type == MOFFS) {
-            snprintf(comment, 10, "%lx", pe_rel_addr ? arg->value - pe->opt32->ImageBase : arg->value);
+            snprintf(comment, 10, "%lx", pe_rel_addr ? arg->value - pe->imagebase : arg->value);
             return comment;
         }
     }
@@ -137,8 +137,6 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
         qword abstip;
 
         tip = end_ip + arg->value;
-        abstip = tip;
-        if (!pe_rel_addr) abstip += pe->imagebase;
 
         if ((comment = get_imported_name(tip, pe)))
             return comment;
@@ -146,13 +144,17 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
         if ((comment = get_export_name(tip, pe)))
             return comment;
 
+        abstip = tip;
+        if (!pe_rel_addr) abstip += pe->imagebase;
+
         snprintf(comment_str, 10, "%lx", abstip);
         return comment_str;
     }
 
     /* FIXME: This is getting messy. */
     rel_value = arg->value;
-    if (!pe_rel_addr) rel_value -= pe->imagebase;
+    if (arg->type != REL8 && arg->type != REL)
+        rel_value -= pe->imagebase;
 
     /* Relocate anything that points inside the image's address space or that
      * has a relocation entry. */
@@ -169,8 +171,7 @@ static const char *get_arg_comment(const struct section *sec, dword end_ip,
         if (tsec && rel_value < tsec->address + tsec->length
                 && read_word(addr2offset(rel_value, pe)) == 0x25ff) /* absolute jmp */
         {
-            rel_value = read_dword(addr2offset(rel_value, pe) + 2);
-            if (!pe_rel_addr) rel_value -= pe->imagebase;
+            rel_value = read_dword(addr2offset(rel_value, pe) + 2) - pe->imagebase;
             return get_imported_name(rel_value, pe);
         }
 
@@ -204,13 +205,6 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, const st
 
     sprintf(ip_string, "%8lx", absip);
 
-    /* We deal in relative addresses internally everywhere. That means we have
-     * to fix up the values for relative jumps if we're not displaying relative
-     * addresses. */
-    if ((instr.op.arg0 == REL8 || instr.op.arg0 == REL) && !pe_rel_addr) {
-        instr.args[0].value += pe->imagebase;
-    }
-
     /* Check for relocations and imported names. PE separates the two concepts:
      * imported names are done by jumping into a block in .idata which is
      * relocated, and relocations proper are scattered throughout code sections
@@ -218,6 +212,13 @@ static int print_pe_instr(const struct section *sec, dword ip, byte *p, const st
 
     if (!(comment = get_arg_comment(sec, ip + len, &instr, &instr.args[0], pe)))
         comment = get_arg_comment(sec, ip + len, &instr, &instr.args[1], pe);
+
+    /* We deal in relative addresses internally everywhere. That means we have
+     * to fix up the values for relative jumps if we're not displaying relative
+     * addresses. */
+    if ((instr.op.arg0 == REL8 || instr.op.arg0 == REL) && !pe_rel_addr) {
+        instr.args[0].value += pe->imagebase;
+    }
 
     print_instr(ip_string, p, len, sec->instr_flags[ip - sec->address], &instr, comment, bits);
 
