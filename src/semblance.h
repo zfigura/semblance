@@ -80,6 +80,8 @@ extern const size_t rsrc_types_count;
 extern char **resource_filters;
 extern unsigned resource_filters_count;
 
+extern const char *program_name;
+
 /* Whether to print addresses relative to the image base for PE files. */
 extern int pe_rel_addr;
 

@@ -458,23 +458,30 @@ static void get_entry_table(off_t start, struct ne *ne)
 
 static void load_exports(struct import_module *module) {
     FILE *specfile;
-    char spec_name[18];
+    char *spec_name;
     char line[300], *p;
     int count;
     word ordinal;
 
-    sprintf(spec_name, "%.8s.ORD", module->name);
+    spec_name = malloc(strlen(program_name) + strlen(module->name) + 10);
+
+    sprintf(spec_name, "%s.ORD", module->name);
     specfile = fopen(spec_name, "r");
     if (!specfile) {
-        sprintf(spec_name, "spec/%.8s.ORD", module->name);
+        sprintf(spec_name, "spec/%s.ORD", module->name);
         specfile = fopen(spec_name, "r");
-        if (!specfile) {
-            fprintf(stderr, "Note: couldn't find specfile for module %s; exported names won't be given.\n", module->name);
-            fprintf(stderr, "      To create a specfile, run `dumpne -o <module.dll>'.\n");
-            module->exports = NULL;
-            module->export_count = 0;
-            return;
-        }
+    }
+    if (!specfile && (p = strrchr(program_name, '/'))) {
+        memcpy(spec_name, program_name, p + 1 - program_name);
+        sprintf(spec_name + (p + 1 - program_name), "spec/%s.ORD", module->name);
+        specfile = fopen(spec_name, "r");
+    }
+    if (!specfile) {
+        fprintf(stderr, "Note: couldn't find specfile for module %s; exported names won't be given.\n", module->name);
+        fprintf(stderr, "      To create a specfile, run `dumpne -o <module.dll>'.\n");
+        module->exports = NULL;
+        module->export_count = 0;
+        return;
     }
 
     /* first grab a count */

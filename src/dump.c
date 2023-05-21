@@ -39,6 +39,8 @@ char **resource_filters;
 unsigned resource_filters_count;
 enum asm_syntax asm_syntax;
 
+const char *program_name;
+
 static void dump_file(char *file){
     struct stat st;
     word magic;
@@ -138,6 +140,7 @@ int main(int argc, char *argv[]){
     mode = 0;
     opts = 0;
     asm_syntax = NASM;
+    program_name = argv[0];
 
     while ((opt = getopt_long(argc, argv, "a::cCdDefhiM:osvx", long_options, NULL)) >= 0){
         switch (opt) {
