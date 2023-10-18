@@ -67,18 +67,27 @@ static void dump_file(char *file){
     magic = read_word(0);
 
     printf("File: %s\n", file);
-    if (magic == 0x5a4d){ /* MZ */
-        offset = read_dword(0x3c);
-        magic = read_word(offset);
-
-        if (magic == 0x4550)
-            dumppe(offset);
-        else if (magic == 0x454e)
-            dumpne(offset);
-        else
-            dumpmz();
-    } else
+    if (magic != 0x5a4d) /* MZ */
+    {
         fprintf(stderr, "File format not recognized\n");
+        return;
+    }
+
+    offset = read_dword(0x3c);
+    if (offset >= st.st_size)
+    {
+        dumpmz();
+        return;
+    }
+
+    magic = read_word(offset);
+
+    if (magic == 0x4550) /* PE */
+        dumppe(offset);
+    else if (magic == 0x454e) /* NE */
+        dumpne(offset);
+    else
+        dumpmz();
 
     return;
 }
