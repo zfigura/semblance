@@ -69,7 +69,8 @@ static void dump_file(char *file){
     printf("File: %s\n", file);
     if (magic == 0x5a4d){ /* MZ */
         offset = read_dword(0x3c);
-        magic = read_word(offset);
+        if (0 < offset && offset < st.st_size-2)
+            magic = read_word(offset);
 
         if (magic == 0x4550)
             dumppe(offset);
